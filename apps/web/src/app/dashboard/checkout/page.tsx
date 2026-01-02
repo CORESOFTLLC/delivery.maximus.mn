@@ -19,7 +19,8 @@ import {
   QrCode,
   X,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Warehouse
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,8 +39,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCartStore } from '@/stores/cart-store';
+import { useWarehouseStore } from '@/stores/warehouse-store';
+import { getUser, getErpDetails } from '@/lib/auth';
 import { toast } from 'sonner';
 import type { QPayUrl, CreateInvoiceResponse, CheckPaymentResponse } from '@/types/payment';
+import { PAYMENT_TYPES, DELIVERY_TYPES } from '@/types/order';
 
 // Payment method type
 type PaymentMethod = 'cash' | 'qpay' | 'card' | 'transfer';
@@ -102,15 +106,33 @@ const formatPrice = (price: number): string => {
   }).format(price) + '₮';
 };
 
+// Order step state
+type OrderStep = 'idle' | 'step1' | 'step2' | 'success' | 'error';
+
+// Default IMEI for web
+const WEB_IMEI = 'WEB-SALES-APP';
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalAmount, formattedTotal, totalItems, clearCart, validateCart, selectedPartner, hasPartner, clearSelectedPartner } = useCartStore();
+  const { selectedWarehouse, erpDetails } = useWarehouseStore();
   
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qpay');
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('pickup');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('delivery');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  
+  // Order state for 2-step process
+  const [orderStep, setOrderStep] = useState<OrderStep>('idle');
+  const [orderUuid, setOrderUuid] = useState<string | null>(null);
+  const [orderStartDate, setOrderStartDate] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  
+  // Loan options (for Step 2)
+  const [useLoan, setUseLoan] = useState(false);
+  const [loanDescription, setLoanDescription] = useState('');
+  const [useDiscount, setUseDiscount] = useState(true);
   
   // QPay state
   const [qpayModalOpen, setQpayModalOpen] = useState(false);
@@ -281,6 +303,119 @@ export default function CheckoutPage() {
     router.push('/dashboard/products');
   }, [selectedPartner, clearCart, clearSelectedPartner, router]);
   
+  // Build order products array for ERP
+  const buildOrderProducts = useCallback(() => {
+    return items.map((item) => ({
+      productId: item.productId,
+      stock: [{ 
+        typeId: 'd114bb13-9c37-11e5-9beb-3085a97c20be', // Default stockType - should come from product
+        count: item.quantity 
+      }],
+      priceType: selectedWarehouse?.priceTypeId || '',
+      sale: 0.0,
+      promotions: [],
+    }));
+  }, [items, selectedWarehouse]);
+  
+  // Step 1: Create Order
+  const createOrder = useCallback(async (): Promise<string | null> => {
+    if (!selectedPartner || !selectedWarehouse) return null;
+    
+    const user = getUser();
+    const now = new Date();
+    const datetime = now.toISOString().slice(0, 19).replace('T', ' ');
+    
+    const orderData = {
+      companyId: selectedPartner.id,
+      contractId: 'db05d0d6-9c37-11e5-9beb-3085a97c20be', // Should come from partner
+      username: user?.email || '',
+      imei: erpDetails?.routeIMEI || WEB_IMEI,
+      warehouseId: selectedWarehouse.uuid,
+      priceTypeId: selectedWarehouse.priceTypeId,
+      customerPriceTypeId: selectedWarehouse.priceTypeId,
+      paymentType: PAYMENT_TYPES[paymentMethod] || 1,
+      cashAmount: null,
+      deliveryType: DELIVERY_TYPES[deliveryMethod] || 2,
+      deliveryDatetime: datetime,
+      deliveryAdditionalInfo: '',
+      description: notes,
+      orderProducts: buildOrderProducts(),
+      latitude: 47.899943,
+      longitude: 106.893723,
+      useDiscount,
+      isSale: selectedWarehouse.isSale || false,
+    };
+    
+    try {
+      const response = await fetch('/api/order/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.uuid) {
+        setOrderStartDate(datetime);
+        return result.uuid;
+      } else {
+        throw new Error(result.error || 'Захиалга үүсгэхэд алдаа гарлаа');
+      }
+    } catch (error) {
+      throw error;
+    }
+  }, [selectedPartner, selectedWarehouse, erpDetails, paymentMethod, deliveryMethod, notes, buildOrderProducts, useDiscount]);
+  
+  // Step 2: Finish Order
+  const finishOrder = useCallback(async (uuid: string): Promise<boolean> => {
+    if (!selectedPartner || !selectedWarehouse || !orderStartDate) return false;
+    
+    const user = getUser();
+    
+    const finishData = {
+      uuid,
+      companyId: selectedPartner.id,
+      contractId: 'db05d0d6-9c37-11e5-9beb-3085a97c20be', // Should come from partner
+      username: user?.email || '',
+      imei: erpDetails?.routeIMEI || WEB_IMEI,
+      warehouseId: selectedWarehouse.uuid,
+      priceTypeId: selectedWarehouse.priceTypeId,
+      customerPriceTypeId: selectedWarehouse.priceTypeId,
+      paymentType: PAYMENT_TYPES[paymentMethod] || 1,
+      cashAmount: null,
+      deliveryType: DELIVERY_TYPES[deliveryMethod] || 2,
+      deliveryDatetime: orderStartDate,
+      deliveryAdditionalInfo: '',
+      description: notes,
+      orderProducts: buildOrderProducts(),
+      latitudeFinish: 47.899943,
+      longitudeFinish: 106.893723,
+      useDiscount,
+      isSale: selectedWarehouse.isSale || false,
+      loan: useLoan,
+      loanDescription: useLoan ? loanDescription : '',
+      start_date: orderStartDate,
+    };
+    
+    try {
+      const response = await fetch('/api/order/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(finishData),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        return true;
+      } else {
+        throw new Error(result.error || 'Захиалга дуусгахад алдаа гарлаа');
+      }
+    } catch (error) {
+      throw error;
+    }
+  }, [selectedPartner, selectedWarehouse, erpDetails, paymentMethod, deliveryMethod, notes, buildOrderProducts, useDiscount, useLoan, loanDescription, orderStartDate]);
+  
   const handleSubmitOrder = async () => {
     if (!validation.isValid) {
       toast.error('Захиалга алдаатай байна');
@@ -292,53 +427,63 @@ export default function CheckoutPage() {
       return;
     }
     
+    if (!selectedWarehouse) {
+      toast.error('Агуулах сонгоогүй байна');
+      return;
+    }
+    
     // If QPay selected, create invoice and show QR
     if (paymentMethod === 'qpay') {
       await createQPayInvoice();
       return;
     }
     
-    // For other payment methods, submit order directly
+    // 2-Step Order Process
     setIsSubmitting(true);
+    setOrderError(null);
     
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Step 1: Create Order
+      setOrderStep('step1');
+      toast.loading('Захиалга үүсгэж байна...', { id: 'order-progress' });
       
-      // Create order object with partner info
-      const order = {
-        partnerId: selectedPartner.id,
-        partnerName: selectedPartner.name,
-        items: items.map((item) => ({
-          productId: item.productId,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        totalAmount,
-        paymentMethod,
-        deliveryMethod,
-        notes,
-        createdAt: new Date().toISOString(),
-      };
+      const uuid = await createOrder();
       
-      console.log('Order submitted:', order);
+      if (!uuid) {
+        throw new Error('Захиалгын UUID буцаж ирсэнгүй');
+      }
       
-      // Clear cart and partner after successful order
-      clearCart();
-      clearSelectedPartner();
+      setOrderUuid(uuid);
+      console.log('[Checkout] Step 1 complete, UUID:', uuid);
       
-      toast.success('Захиалга амжилттай илгээгдлээ!', {
-        description: `${selectedPartner.name} дээр захиалга хүлээн авагдлаа`,
-        duration: 5000,
-      });
+      // Step 2: Finish Order
+      setOrderStep('step2');
+      toast.loading('Захиалга дуусгаж байна...', { id: 'order-progress' });
       
-      // Redirect to products page
-      router.push('/dashboard/products');
+      const success = await finishOrder(uuid);
+      
+      if (success) {
+        setOrderStep('success');
+        toast.success('Захиалга амжилттай илгээгдлээ!', { 
+          id: 'order-progress',
+          description: `${selectedPartner.name} дээр захиалга хүлээн авагдлаа`,
+          duration: 5000,
+        });
+        
+        // Clear cart and partner after successful order
+        clearCart();
+        clearSelectedPartner();
+        
+        // Redirect to products page
+        router.push('/dashboard/products');
+      }
       
     } catch (error) {
       console.error('Order submission failed:', error);
-      toast.error('Захиалга илгээхэд алдаа гарлаа');
+      setOrderStep('error');
+      const errorMessage = error instanceof Error ? error.message : 'Захиалга илгээхэд алдаа гарлаа';
+      setOrderError(errorMessage);
+      toast.error(errorMessage, { id: 'order-progress' });
     } finally {
       setIsSubmitting(false);
     }
@@ -403,6 +548,46 @@ export default function CheckoutPage() {
                       </div>
                     )}
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {/* Warehouse & Route Info */}
+          {(selectedWarehouse || erpDetails) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Warehouse className="h-5 w-5" />
+                  Агуулах & Маршрут
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Warehouse */}
+                  {selectedWarehouse && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Warehouse className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Агуулах</p>
+                        <p className="font-medium truncate">{selectedWarehouse.name}</p>
+                        {selectedWarehouse.isSale && (
+                          <Badge variant="secondary" className="mt-1 text-xs">Борлуулалт</Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Route */}
+                  {erpDetails?.routeName && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Truck className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">Маршрут</p>
+                        <p className="font-medium truncate">{erpDetails.routeName}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -490,6 +675,74 @@ export default function CheckoutPage() {
                   </Label>
                 ))}
               </RadioGroup>
+            </CardContent>
+          </Card>
+          
+          {/* Order Options */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Захиалгын сонголтууд</CardTitle>
+              <CardDescription>
+                Хямдрал болон зээлийн сонголтууд
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Use Discount */}
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Хямдрал ашиглах</p>
+                    <p className="text-sm text-muted-foreground">Урамшуулал, хямдралд хамрагдах</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useDiscount}
+                    onChange={(e) => setUseDiscount(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+              
+              {/* Loan Option */}
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Wallet className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Зээлээр авах</p>
+                    <p className="text-sm text-muted-foreground">Төлбөрийг дараа хийнэ</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useLoan}
+                    onChange={(e) => setUseLoan(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+              
+              {/* Loan Description - shows when loan is selected */}
+              {useLoan && (
+                <div className="mt-3 pl-3">
+                  <Textarea
+                    placeholder="Зээлийн нэмэлт тайлбар..."
+                    value={loanDescription}
+                    onChange={(e) => setLoanDescription(e.target.value)}
+                    rows={2}
+                    className="w-full"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
           

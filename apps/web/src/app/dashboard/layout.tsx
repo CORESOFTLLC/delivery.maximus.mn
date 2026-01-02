@@ -14,7 +14,10 @@ import {
   Menu,
   Building2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Warehouse,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +25,7 @@ import { cn } from '@/lib/utils';
 import AuthGuard from '@/components/auth/AuthGuard';
 import { useAuth } from '@/hooks/useAuth';
 import { useCartStore } from '@/stores/cart-store';
+import { useWarehouseStore, getWarehouseDisplayName } from '@/stores/warehouse-store';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   AlertDialog,
@@ -33,6 +37,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Hook for hydration-safe client-side rendering
 function useHydrated() {
@@ -126,6 +138,130 @@ function SelectedPartnerBadge({ onClear }: { onClear: () => void }) {
   );
 }
 
+// Warehouse Selector Component
+function WarehouseSelector() {
+  const { warehouses, selectedWarehouse, selectWarehouseById, erpDetails } = useWarehouseStore();
+  const { totalItems, clearCart } = useCartStore();
+  const [showClearCartDialog, setShowClearCartDialog] = useState(false);
+  const [pendingWarehouseId, setPendingWarehouseId] = useState<string | null>(null);
+  const isHydrated = useHydrated();
+
+  if (!isHydrated || warehouses.length === 0) {
+    return null;
+  }
+
+  const handleWarehouseSelect = (warehouseId: string) => {
+    // Don't do anything if selecting the same warehouse
+    if (selectedWarehouse?.uuid === warehouseId) {
+      return;
+    }
+
+    // If cart has items, show confirmation dialog
+    if (totalItems > 0) {
+      setPendingWarehouseId(warehouseId);
+      setShowClearCartDialog(true);
+    } else {
+      selectWarehouseById(warehouseId);
+    }
+  };
+
+  const handleConfirmClearCart = () => {
+    if (pendingWarehouseId) {
+      clearCart();
+      selectWarehouseById(pendingWarehouseId);
+    }
+    setShowClearCartDialog(false);
+    setPendingWarehouseId(null);
+  };
+
+  const handleCancelClearCart = () => {
+    setShowClearCartDialog(false);
+    setPendingWarehouseId(null);
+  };
+
+  return (
+    <>
+      <div className="border-b px-4 py-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="outline" 
+              className="w-full justify-between gap-2 h-auto py-2"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Warehouse className="h-4 w-4 flex-shrink-0 text-orange-500" />
+                <div className="text-left truncate">
+                  <p className="text-xs text-muted-foreground">Агуулах</p>
+                  <p className="text-sm font-medium truncate">
+                    {selectedWarehouse 
+                      ? getWarehouseDisplayName(selectedWarehouse) 
+                      : 'Сонгох'
+                    }
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 flex-shrink-0 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[240px]">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Агуулах сонгох
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {warehouses.map((warehouse) => (
+              <DropdownMenuItem
+                key={warehouse.uuid}
+                onClick={() => handleWarehouseSelect(warehouse.uuid)}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{getWarehouseDisplayName(warehouse)}</span>
+                  {selectedWarehouse?.uuid === warehouse.uuid && (
+                    <Check className="h-4 w-4 text-primary flex-shrink-0 ml-2" />
+                  )}
+                </div>
+              </DropdownMenuItem>
+            ))}
+            {erpDetails?.routeName && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  <span className="font-medium">Маршрут:</span> {erpDetails.routeName}
+                </div>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Clear Cart Confirmation Dialog */}
+      <AlertDialog open={showClearCartDialog} onOpenChange={setShowClearCartDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Агуулах солихоор сагс хоослогдоно
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Агуулах солиход таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно. 
+              Та үргэлжлүүлэх үү?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelClearCart}>Үгүй, буцах</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmClearCart}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Тийм, солих
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { logout, user } = useAuth();
@@ -152,6 +288,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Selected Partner */}
       <SelectedPartnerBadge onClear={clearSelectedPartner} />
+
+      {/* Warehouse Selector */}
+      <WarehouseSelector />
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { login as apiLogin, logout as apiLogout, getToken, getUser, LoginCredentials, AuthResponse } from '@/lib/auth';
+import { login as apiLogin, logout as apiLogout, getToken, getUser, getErpDetails, LoginCredentials, AuthResponse } from '@/lib/auth';
+import { useWarehouseStore } from '@/stores/warehouse-store';
+import { useCartStore } from '@/stores/cart-store';
 
 export function useAuth() {
   const router = useRouter();
@@ -10,14 +12,24 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  
+  const { setErpDetails, clearAll: clearWarehouse } = useWarehouseStore();
+  const { clearCart, clearSelectedPartner } = useCartStore();
 
   useEffect(() => {
     // Check auth status on mount
     const token = getToken();
     const savedUser = getUser();
+    const erpDetails = getErpDetails();
+    
     setIsAuthenticated(!!token);
     setUser(savedUser);
-  }, []);
+    
+    // Restore ERP details to warehouse store
+    if (erpDetails) {
+      setErpDetails(erpDetails);
+    }
+  }, [setErpDetails]);
 
   const login = useCallback(async (credentials: LoginCredentials): Promise<AuthResponse | null> => {
     setIsLoading(true);
@@ -29,6 +41,12 @@ export function useAuth() {
       if (response.user) {
         setUser(response.user);
       }
+      
+      // Save ERP details to warehouse store
+      if (response.erp_details) {
+        setErpDetails(response.erp_details);
+      }
+      
       router.push('/dashboard');
       return response;
     } catch (err) {
@@ -38,7 +56,7 @@ export function useAuth() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, setErpDetails]);
 
   const logout = useCallback(async () => {
     setIsLoading(true);
@@ -46,11 +64,17 @@ export function useAuth() {
       await apiLogout();
       setIsAuthenticated(false);
       setUser(null);
+      
+      // Clear warehouse and cart on logout
+      clearWarehouse();
+      clearCart();
+      clearSelectedPartner();
+      
       router.push('/login');
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, clearWarehouse, clearCart, clearSelectedPartner]);
 
   return {
     isLoading,
