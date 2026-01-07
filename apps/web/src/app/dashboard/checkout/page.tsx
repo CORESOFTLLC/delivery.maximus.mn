@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, 
-  CreditCard, 
-  Wallet, 
-  Building2, 
-  Truck, 
+import {
+  ArrowLeft,
+  CreditCard,
+  Wallet,
+  Building2,
+  Truck,
   MapPin,
   CheckCircle2,
   Loader2,
@@ -116,24 +116,24 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalAmount, formattedTotal, totalItems, clearCart, validateCart, selectedPartner, hasPartner, clearSelectedPartner } = useCartStore();
   const { selectedWarehouse, erpDetails } = useWarehouseStore();
-  
+
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('delivery');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  
+
   // Order state for 2-step process
   const [orderStep, setOrderStep] = useState<OrderStep>('idle');
   const [orderUuid, setOrderUuid] = useState<string | null>(null);
   const [orderStartDate, setOrderStartDate] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
-  
+
   // Loan options (for Step 2)
   const [useLoan, setUseLoan] = useState(false);
   const [loanDescription, setLoanDescription] = useState('');
   const [useDiscount, setUseDiscount] = useState(true);
-  
+
   // QPay state
   const [qpayModalOpen, setQpayModalOpen] = useState(false);
   const [qpayInvoiceId, setQpayInvoiceId] = useState<string | null>(null);
@@ -143,18 +143,18 @@ export default function CheckoutPage() {
   const [qpayChecking, setQpayChecking] = useState(false);
   const [qpayPaid, setQpayPaid] = useState(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Redirect if cart is empty or no partner selected
   useEffect(() => {
     if (mounted && (items.length === 0 || !hasPartner)) {
       router.replace('/dashboard/cart');
     }
   }, [mounted, items.length, hasPartner, router]);
-  
+
   // Cleanup interval on unmount
   useEffect(() => {
     return () => {
@@ -163,25 +163,25 @@ export default function CheckoutPage() {
       }
     };
   }, []);
-  
+
   const validation = validateCart();
-  
+
   // Generate unique order code
   const generateOrderCode = useCallback(() => {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `ORD-${timestamp}-${random}`;
   }, []);
-  
+
   // Create QPay invoice
   const createQPayInvoice = useCallback(async () => {
     if (!selectedPartner) return;
-    
+
     setQpayLoading(true);
-    
+
     try {
       const orderCode = generateOrderCode();
-      
+
       const response = await fetch('/api/payment/qpay/invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,15 +192,15 @@ export default function CheckoutPage() {
           partnerName: selectedPartner.name,
         }),
       });
-      
+
       const data: CreateInvoiceResponse = await response.json();
-      
+
       if (data.success && data.invoiceId && data.qrImage) {
         setQpayInvoiceId(data.invoiceId);
         setQpayQrImage(data.qrImage);
         setQpayUrls(data.urls || []);
         setQpayModalOpen(true);
-        
+
         // Start checking payment status
         startPaymentCheck(data.invoiceId);
       } else {
@@ -213,30 +213,30 @@ export default function CheckoutPage() {
       setQpayLoading(false);
     }
   }, [selectedPartner, totalAmount, generateOrderCode]);
-  
+
   // Check payment status
   const checkPaymentStatus = useCallback(async (invoiceId: string) => {
     try {
       setQpayChecking(true);
-      
+
       const response = await fetch('/api/payment/qpay/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId }),
       });
-      
+
       const data: CheckPaymentResponse = await response.json();
-      
+
       if (data.success && data.paid) {
         setQpayPaid(true);
-        
+
         // Stop checking
         if (checkIntervalRef.current) {
           clearInterval(checkIntervalRef.current);
         }
-        
+
         toast.success('Төлбөр амжилттай хийгдлээ!');
-        
+
         // Complete order after short delay
         setTimeout(() => {
           completeOrder();
@@ -248,24 +248,24 @@ export default function CheckoutPage() {
       setQpayChecking(false);
     }
   }, []);
-  
+
   // Start payment checking interval
   const startPaymentCheck = useCallback((invoiceId: string) => {
     // Check every 3 seconds
     checkIntervalRef.current = setInterval(() => {
       checkPaymentStatus(invoiceId);
     }, 3000);
-    
+
     // Also check immediately
     checkPaymentStatus(invoiceId);
   }, [checkPaymentStatus]);
-  
+
   // Cancel QPay and close modal
   const cancelQPay = useCallback(async () => {
     if (checkIntervalRef.current) {
       clearInterval(checkIntervalRef.current);
     }
-    
+
     if (qpayInvoiceId) {
       try {
         await fetch('/api/payment/qpay/cancel', {
@@ -277,58 +277,58 @@ export default function CheckoutPage() {
         console.error('Cancel invoice error:', error);
       }
     }
-    
+
     setQpayModalOpen(false);
     setQpayInvoiceId(null);
     setQpayQrImage(null);
     setQpayUrls([]);
     setQpayPaid(false);
   }, [qpayInvoiceId]);
-  
+
   // Complete order (called after successful payment or for non-QPay methods)
   const completeOrder = useCallback(async () => {
     if (!selectedPartner) return;
-    
+
     // Clear cart and partner
     clearCart();
     clearSelectedPartner();
-    
+
     toast.success('Захиалга амжилттай илгээгдлээ!', {
       description: `${selectedPartner.name} дээр захиалга хүлээн авагдлаа`,
       duration: 5000,
     });
-    
+
     // Close modal and redirect
     setQpayModalOpen(false);
     router.push('/dashboard/products');
   }, [selectedPartner, clearCart, clearSelectedPartner, router]);
-  
+
   // Build order products array for ERP
   const buildOrderProducts = useCallback(() => {
     return items.map((item) => ({
       productId: item.productId,
-      stock: [{ 
+      stock: [{
         typeId: 'd114bb13-9c37-11e5-9beb-3085a97c20be', // Default stockType - should come from product
-        count: item.quantity 
+        count: item.quantity
       }],
       priceType: selectedWarehouse?.priceTypeId || '',
       sale: 0.0,
       promotions: [],
     }));
   }, [items, selectedWarehouse]);
-  
+
   // Step 1: Create Order
-  const createOrder = useCallback(async (): Promise<string | null> => {
+  const createOrder = useCallback(async (): Promise<{ uuid: string; datetime: string } | null> => {
     if (!selectedPartner || !selectedWarehouse) return null;
-    
+
     const user = getUser();
     const now = new Date();
     const datetime = now.toISOString().slice(0, 19).replace('T', ' ');
-    
+
     const orderData = {
       companyId: selectedPartner.id,
       contractId: 'db05d0d6-9c37-11e5-9beb-3085a97c20be', // Should come from partner
-      username: user?.email || '',
+      username: user?.email || '9915513',
       imei: erpDetails?.routeIMEI || WEB_IMEI,
       warehouseId: selectedWarehouse.uuid,
       priceTypeId: selectedWarehouse.priceTypeId,
@@ -345,19 +345,21 @@ export default function CheckoutPage() {
       useDiscount,
       isSale: selectedWarehouse.isSale || false,
     };
-    
+
     try {
+      console.log('[Checkout] Sending order data:', JSON.stringify(orderData, null, 2));
       const response = await fetch('/api/order/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData),
       });
-      
+
       const result = await response.json();
-      
+      console.log('[Checkout] Order API result:', result);
+
       if (result.success && result.uuid) {
         setOrderStartDate(datetime);
-        return result.uuid;
+        return { uuid: result.uuid, datetime };
       } else {
         throw new Error(result.error || 'Захиалга үүсгэхэд алдаа гарлаа');
       }
@@ -365,18 +367,18 @@ export default function CheckoutPage() {
       throw error;
     }
   }, [selectedPartner, selectedWarehouse, erpDetails, paymentMethod, deliveryMethod, notes, buildOrderProducts, useDiscount]);
-  
+
   // Step 2: Finish Order
-  const finishOrder = useCallback(async (uuid: string): Promise<boolean> => {
-    if (!selectedPartner || !selectedWarehouse || !orderStartDate) return false;
-    
+  const finishOrder = useCallback(async (uuid: string, startDate: string): Promise<boolean> => {
+    if (!selectedPartner || !selectedWarehouse) return false;
+
     const user = getUser();
-    
+
     const finishData = {
       uuid,
       companyId: selectedPartner.id,
       contractId: 'db05d0d6-9c37-11e5-9beb-3085a97c20be', // Should come from partner
-      username: user?.email || '',
+      username: user?.email || '9915513',
       imei: erpDetails?.routeIMEI || WEB_IMEI,
       warehouseId: selectedWarehouse.uuid,
       priceTypeId: selectedWarehouse.priceTypeId,
@@ -384,7 +386,7 @@ export default function CheckoutPage() {
       paymentType: PAYMENT_TYPES[paymentMethod] || 1,
       cashAmount: null,
       deliveryType: DELIVERY_TYPES[deliveryMethod] || 2,
-      deliveryDatetime: orderStartDate,
+      deliveryDatetime: startDate,
       deliveryAdditionalInfo: '',
       description: notes,
       orderProducts: buildOrderProducts(),
@@ -394,18 +396,18 @@ export default function CheckoutPage() {
       isSale: selectedWarehouse.isSale || false,
       loan: useLoan,
       loanDescription: useLoan ? loanDescription : '',
-      start_date: orderStartDate,
+      start_date: startDate,
     };
-    
+
     try {
       const response = await fetch('/api/order/finish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finishData),
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         return true;
       } else {
@@ -414,70 +416,71 @@ export default function CheckoutPage() {
     } catch (error) {
       throw error;
     }
-  }, [selectedPartner, selectedWarehouse, erpDetails, paymentMethod, deliveryMethod, notes, buildOrderProducts, useDiscount, useLoan, loanDescription, orderStartDate]);
-  
+  }, [selectedPartner, selectedWarehouse, erpDetails, paymentMethod, deliveryMethod, notes, buildOrderProducts, useDiscount, useLoan, loanDescription]);
+
   const handleSubmitOrder = async () => {
     if (!validation.isValid) {
       toast.error('Захиалга алдаатай байна');
       return;
     }
-    
+
     if (!selectedPartner) {
       toast.error('Харилцагч сонгоогүй байна');
       return;
     }
-    
+
     if (!selectedWarehouse) {
       toast.error('Агуулах сонгоогүй байна');
       return;
     }
-    
+
     // If QPay selected, create invoice and show QR
     if (paymentMethod === 'qpay') {
       await createQPayInvoice();
       return;
     }
-    
+
     // 2-Step Order Process
     setIsSubmitting(true);
     setOrderError(null);
-    
+
     try {
       // Step 1: Create Order
       setOrderStep('step1');
       toast.loading('Захиалга үүсгэж байна...', { id: 'order-progress' });
-      
-      const uuid = await createOrder();
-      
-      if (!uuid) {
+
+      const orderResult = await createOrder();
+
+      if (!orderResult) {
         throw new Error('Захиалгын UUID буцаж ирсэнгүй');
       }
-      
+
+      const { uuid, datetime } = orderResult;
       setOrderUuid(uuid);
       console.log('[Checkout] Step 1 complete, UUID:', uuid);
-      
+
       // Step 2: Finish Order
       setOrderStep('step2');
       toast.loading('Захиалга дуусгаж байна...', { id: 'order-progress' });
-      
-      const success = await finishOrder(uuid);
-      
+
+      const success = await finishOrder(uuid, datetime);
+
       if (success) {
         setOrderStep('success');
-        toast.success('Захиалга амжилттай илгээгдлээ!', { 
+        toast.success('Захиалга амжилттай илгээгдлээ!', {
           id: 'order-progress',
           description: `${selectedPartner.name} дээр захиалга хүлээн авагдлаа`,
           duration: 5000,
         });
-        
+
         // Clear cart and partner after successful order
         clearCart();
         clearSelectedPartner();
-        
-        // Redirect to products page
-        router.push('/dashboard/products');
+
+        // Redirect to order detail page
+        router.push(`/dashboard/orders/${uuid}`);
       }
-      
+
     } catch (error) {
       console.error('Order submission failed:', error);
       setOrderStep('error');
@@ -488,7 +491,7 @@ export default function CheckoutPage() {
       setIsSubmitting(false);
     }
   };
-  
+
   // Loading state
   if (!mounted) {
     return (
@@ -497,7 +500,7 @@ export default function CheckoutPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
       {/* Header */}
@@ -509,7 +512,7 @@ export default function CheckoutPage() {
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold">Захиалга баталгаажуулах</h1>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Options */}
         <div className="lg:col-span-2 space-y-6">
@@ -552,7 +555,7 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
           )}
-          
+
           {/* Warehouse & Route Info */}
           {(selectedWarehouse || erpDetails) && (
             <Card>
@@ -577,7 +580,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Route */}
                   {erpDetails?.routeName && (
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
@@ -592,7 +595,7 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
           )}
-          
+
           {/* Delivery Method */}
           <Card>
             <CardHeader>
@@ -611,11 +614,10 @@ export default function CheckoutPage() {
                   <Label
                     key={method.id}
                     htmlFor={method.id}
-                    className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      deliveryMethod === method.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-muted hover:border-primary/50'
-                    }`}
+                    className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${deliveryMethod === method.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-primary/50'
+                      }`}
                   >
                     <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
                     <div className="flex-1">
@@ -637,7 +639,7 @@ export default function CheckoutPage() {
               </RadioGroup>
             </CardContent>
           </Card>
-          
+
           {/* Payment Method */}
           <Card>
             <CardHeader>
@@ -656,16 +658,14 @@ export default function CheckoutPage() {
                   <Label
                     key={method.id}
                     htmlFor={`payment-${method.id}`}
-                    className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all text-center ${
-                      paymentMethod === method.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-muted hover:border-primary/50'
-                    }`}
+                    className={`flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all text-center ${paymentMethod === method.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-primary/50'
+                      }`}
                   >
                     <RadioGroupItem value={method.id} id={`payment-${method.id}`} className="sr-only" />
-                    <method.icon className={`h-8 w-8 ${
-                      paymentMethod === method.id ? 'text-primary' : 'text-muted-foreground'
-                    }`} />
+                    <method.icon className={`h-8 w-8 ${paymentMethod === method.id ? 'text-primary' : 'text-muted-foreground'
+                      }`} />
                     <div>
                       <span className="font-medium block">{method.name}</span>
                       <p className="text-xs text-muted-foreground mt-0.5">
@@ -677,7 +677,7 @@ export default function CheckoutPage() {
               </RadioGroup>
             </CardContent>
           </Card>
-          
+
           {/* Order Options */}
           <Card>
             <CardHeader>
@@ -708,7 +708,7 @@ export default function CheckoutPage() {
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                 </label>
               </div>
-              
+
               {/* Loan Option */}
               <div className="flex items-center justify-between p-3 rounded-lg border">
                 <div className="flex items-center gap-3">
@@ -730,7 +730,7 @@ export default function CheckoutPage() {
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                 </label>
               </div>
-              
+
               {/* Loan Description - shows when loan is selected */}
               {useLoan && (
                 <div className="mt-3 pl-3">
@@ -745,7 +745,7 @@ export default function CheckoutPage() {
               )}
             </CardContent>
           </Card>
-          
+
           {/* Notes */}
           <Card>
             <CardHeader>
@@ -764,7 +764,7 @@ export default function CheckoutPage() {
             </CardContent>
           </Card>
         </div>
-        
+
         {/* Right Column - Summary */}
         <div className="lg:col-span-1">
           <Card className="sticky top-6">
@@ -783,33 +783,33 @@ export default function CheckoutPage() {
                   </div>
                 ))}
               </div>
-              
+
               <Separator />
-              
+
               {/* Subtotal */}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Нийт барааны тоо</span>
                 <span>{totalItems} ширхэг</span>
               </div>
-              
+
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Дүн</span>
                 <span>{formattedTotal}</span>
               </div>
-              
+
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Хүргэлт</span>
                 <span className="text-green-600">Үнэгүй</span>
               </div>
-              
+
               <Separator />
-              
+
               {/* Total */}
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-lg">Нийт төлөх</span>
                 <span className="font-bold text-2xl text-primary">{formattedTotal}</span>
               </div>
-              
+
               {/* Validation errors */}
               {!validation.isValid && (
                 <Alert variant="destructive">
@@ -850,7 +850,7 @@ export default function CheckoutPage() {
           </Card>
         </div>
       </div>
-      
+
       {/* QPay QR Modal */}
       <Dialog open={qpayModalOpen} onOpenChange={(open) => !open && cancelQPay()}>
         <DialogContent className="sm:max-w-md">
@@ -863,7 +863,7 @@ export default function CheckoutPage() {
               QR кодыг уншуулж төлбөрөө төлнө үү
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex flex-col items-center py-4">
             {/* Payment status */}
             {qpayPaid ? (
@@ -881,7 +881,7 @@ export default function CheckoutPage() {
                   <p className="text-sm text-muted-foreground">Төлөх дүн</p>
                   <p className="text-3xl font-bold text-primary">{formattedTotal}</p>
                 </div>
-                
+
                 {/* QR Code */}
                 {qpayQrImage && (
                   <div className="bg-white p-4 rounded-lg border">
@@ -894,7 +894,7 @@ export default function CheckoutPage() {
                     />
                   </div>
                 )}
-                
+
                 {/* Checking status indicator */}
                 <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
                   {qpayChecking ? (
@@ -904,7 +904,7 @@ export default function CheckoutPage() {
                   )}
                   <span>Төлбөр хүлээж байна...</span>
                 </div>
-                
+
                 {/* Bank app links */}
                 {qpayUrls.length > 0 && (
                   <div className="mt-6 w-full">
@@ -939,7 +939,7 @@ export default function CheckoutPage() {
               </>
             )}
           </div>
-          
+
           <DialogFooter>
             {!qpayPaid && (
               <Button variant="outline" onClick={cancelQPay} className="w-full">

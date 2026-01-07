@@ -7,22 +7,24 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || 'http://203.21.120.60:8080';
 const ERP_ORDER_PATH = '/maximus_trade/hs/direct/Order';
+const ERP_USERNAME = process.env.ERP_USERNAME || 'TestAPI';
+const ERP_PASSWORD = process.env.ERP_PASSWORD || 'jI9da0zu';
 const MOBILE_VERSION = '2.2.2';
 
 export interface CreateOrderBody {
   // Partner info
   companyId: string;
   contractId: string;
-  
+
   // User info
   username: string;
   imei: string;
-  
+
   // Warehouse & pricing
   warehouseId: string;
   priceTypeId: string;
   customerPriceTypeId: string;
-  
+
   // Order details
   paymentType: number;
   cashAmount?: number | null;
@@ -30,7 +32,7 @@ export interface CreateOrderBody {
   deliveryDatetime: string;
   deliveryAdditionalInfo?: string;
   description?: string;
-  
+
   // Products
   orderProducts: Array<{
     productId: string;
@@ -39,11 +41,11 @@ export interface CreateOrderBody {
     sale: number;
     promotions: string[];
   }>;
-  
+
   // Location
   latitude: number;
   longitude: number;
-  
+
   // Options
   useDiscount: boolean;
   isSale: boolean;
@@ -52,7 +54,7 @@ export interface CreateOrderBody {
 export async function POST(request: NextRequest) {
   try {
     const body: CreateOrderBody = await request.json();
-    
+
     // Validate required fields
     if (!body.companyId || !body.contractId) {
       return NextResponse.json(
@@ -60,25 +62,25 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     if (!body.warehouseId || !body.priceTypeId) {
       return NextResponse.json(
         { success: false, error: 'Агуулахын мэдээлэл дутуу байна' },
         { status: 400 }
       );
     }
-    
+
     if (!body.orderProducts || body.orderProducts.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Бараа сонгоогүй байна' },
         { status: 400 }
       );
     }
-    
+
     // Current datetime
     const now = new Date();
     const datetime = now.toISOString().slice(0, 19).replace('T', ' ');
-    
+
     // Build Step 1 request
     const orderRequest = {
       uuid: '', // Empty for new order
@@ -106,36 +108,42 @@ export async function POST(request: NextRequest) {
       end_date: datetime,
       mobileVersion: MOBILE_VERSION,
     };
-    
+
     console.log('[Order API] Step 1 - Creating order:', {
       companyId: body.companyId,
       warehouseId: body.warehouseId,
       productCount: body.orderProducts.length,
     });
-    
+
+    console.log('[Order API] Full request payload:', JSON.stringify(orderRequest, null, 2));
+
     // Send to ERP
+    const authHeader = 'Basic ' + Buffer.from(`${ERP_USERNAME}:${ERP_PASSWORD}`).toString('base64');
+
     const response = await fetch(`${ERP_BASE_URL}${ERP_ORDER_PATH}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Authorization': authHeader,
       },
       body: JSON.stringify(orderRequest),
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Order API] ERP error:', response.status, errorText);
+      console.error('[Order API] Request that caused error:', JSON.stringify(orderRequest, null, 2));
       return NextResponse.json(
-        { success: false, error: `ERP алдаа: ${response.status}` },
+        { success: false, error: `ERP алдаа: ${response.status}`, details: errorText },
         { status: 500 }
       );
     }
-    
+
     const result = await response.json();
-    
+
     console.log('[Order API] Step 1 response:', result);
-    
+
     // Check for UUID in response
     if (result.uuid) {
       return NextResponse.json({
@@ -149,7 +157,7 @@ export async function POST(request: NextRequest) {
         error: result.error || result.message || 'Захиалга үүсгэхэд алдаа гарлаа',
       });
     }
-    
+
     // If response has uuid field even in different structure
     return NextResponse.json({
       success: true,
@@ -157,7 +165,7 @@ export async function POST(request: NextRequest) {
       message: result.message || 'Захиалга үүслээ',
       raw: result,
     });
-    
+
   } catch (error) {
     console.error('[Order API] Error:', error);
     return NextResponse.json(

@@ -5,3 +5,4 @@
 export * from './product';
 export * from './partner';
 export * from './auth';
+export * from './order';

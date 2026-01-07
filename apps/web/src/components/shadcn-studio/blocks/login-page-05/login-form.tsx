@@ -12,20 +12,20 @@ import { useAuth } from '@/hooks/useAuth'
 
 const LoginForm = () => {
   const [isVisible, setIsVisible] = useState(false)
-  const [email, setEmail] = useState('')
+  const [corporateId, setCorporateId] = useState('')
   const [password, setPassword] = useState('')
   const { login, isLoading, error, setError } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    
-    if (!email || !password) {
-      setError('И-мэйл болон нууц үг оруулна уу')
+
+    if (!corporateId || !password) {
+      setError('Байгууллагын ID болон нууц үг оруулна уу')
       return
     }
 
-    await login({ email, password })
+    await login({ corporate_id: corporateId, password })
   }
 
   return (
@@ -35,18 +35,18 @@ const LoginForm = () => {
           {error}
         </div>
       )}
-      
-      {/* Email */}
+
+      {/* Corporate ID */}
       <div className='space-y-1'>
-        <Label className='leading-5' htmlFor='userEmail'>
-          И-мэйл хаяг*
+        <Label className='leading-5' htmlFor='corporateId'>
+          Байгууллагын ID*
         </Label>
-        <Input 
-          type='email' 
-          id='userEmail' 
-          placeholder='И-мэйл хаягаа оруулна уу'
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+        <Input
+          type='text'
+          id='corporateId'
+          placeholder='Байгууллагын ID оруулна уу'
+          value={corporateId}
+          onChange={(e) => setCorporateId(e.target.value)}
           disabled={isLoading}
           required
         />
@@ -58,10 +58,10 @@ const LoginForm = () => {
           Нууц үг*
         </Label>
         <div className='relative'>
-          <Input 
-            id='password' 
-            type={isVisible ? 'text' : 'password'} 
-            placeholder='••••••••••••••••' 
+          <Input
+            id='password'
+            type={isVisible ? 'text' : 'password'}
+            placeholder='••••••••••••••••'
             className='pr-9'
             value={password}
             onChange={(e) => setPassword(e.target.value)}

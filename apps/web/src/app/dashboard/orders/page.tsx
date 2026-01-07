@@ -1,74 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Package2, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Truck, 
+import {
+  CheckCircle,
   ShoppingBag,
   FileText,
-  Calendar
+  Calendar,
+  RefreshCw,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Percent,
+  Gift,
+  Warehouse,
+  Building2,
+  CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-// Order status type
-type OrderStatus = 'pending' | 'confirmed' | 'shipping' | 'delivered' | 'cancelled';
-
-// Mock order data - replace with actual data later
-interface Order {
-  id: string;
-  orderNumber: string;
-  createdAt: string;
-  status: OrderStatus;
-  itemCount: number;
-  totalAmount: number;
-  paymentMethod: string;
-}
-
-// Status config
-const statusConfig: Record<OrderStatus, { 
-  label: string; 
-  color: string; 
-  icon: typeof Clock;
-  bgColor: string;
-}> = {
-  pending: {
-    label: 'Хүлээгдэж буй',
-    color: 'text-yellow-700',
-    bgColor: 'bg-yellow-50 border-yellow-200',
-    icon: Clock,
-  },
-  confirmed: {
-    label: 'Баталгаажсан',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-50 border-blue-200',
-    icon: CheckCircle,
-  },
-  shipping: {
-    label: 'Хүргэлтэнд',
-    color: 'text-purple-700',
-    bgColor: 'bg-purple-50 border-purple-200',
-    icon: Truck,
-  },
-  delivered: {
-    label: 'Хүргэгдсэн',
-    color: 'text-green-700',
-    bgColor: 'bg-green-50 border-green-200',
-    icon: CheckCircle,
-  },
-  cancelled: {
-    label: 'Цуцлагдсан',
-    color: 'text-red-700',
-    bgColor: 'bg-red-50 border-red-200',
-    icon: XCircle,
-  },
-};
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { getClient } from '@/lib/auth';
+import { OrderDetailSheet } from '@/components/order-detail-sheet';
+import type { OrderListItem, OrderListResponse } from '@/types/order';
 
 // Format price helper
 const formatPrice = (price: number): string => {
@@ -81,15 +52,46 @@ const formatPrice = (price: number): string => {
 
 // Format date helper
 const formatDate = (dateString: string): string => {
+  if (!dateString) return '-';
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat('mn-MN', {
+  return date.toLocaleDateString('mn-MN', {
     year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+    month: '2-digit',
+    day: '2-digit',
+  });
 };
+
+// Status badge colors
+const getStatusBadge = (status: string) => {
+  const statusLower = (status || '').toLowerCase();
+  if (statusLower.includes('баталгаажсан') || statusLower.includes('confirmed') || statusLower.includes('approved')) {
+    return <Badge variant="default" className="bg-green-500">{status}</Badge>;
+  }
+  if (statusLower.includes('цуцлагдсан') || statusLower.includes('cancelled') || statusLower.includes('rejected')) {
+    return <Badge variant="destructive">{status}</Badge>;
+  }
+  if (statusLower.includes('хүлээгдэж') || statusLower.includes('pending') || statusLower.includes('new')) {
+    return <Badge variant="secondary">{status}</Badge>;
+  }
+  return <Badge variant="outline">{status || 'Шинэ'}</Badge>;
+};
+
+// Loading skeleton
+function OrdersTableSkeleton() {
+  return (
+    <div className="space-y-3 p-6">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex gap-4 items-center p-4 border rounded-lg">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-48 flex-1" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-6 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Empty State Component
 function EmptyOrders() {
@@ -100,7 +102,7 @@ function EmptyOrders() {
       </div>
       <h2 className="text-2xl font-semibold text-center mb-2">Захиалга байхгүй байна</h2>
       <p className="text-muted-foreground text-center mb-8 max-w-md">
-        Та одоогоор захиалга хийгээгүй байна. Бараа бүтээгдэхүүнээс сонгон захиалга хийнэ үү.
+        Сүүлийн 30 хоногт захиалга олдсонгүй.
       </p>
       <Button asChild size="lg">
         <Link href="/dashboard/products">
@@ -112,185 +114,336 @@ function EmptyOrders() {
   );
 }
 
-// Order Card Component
-function OrderCard({ order }: { order: Order }) {
-  const status = statusConfig[order.status];
-  const StatusIcon = status.icon;
-  
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4 md:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {/* Order Info */}
-          <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-xl ${status.bgColor} border`}>
-              <StatusIcon className={`h-6 w-6 ${status.color}`} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-lg">#{order.orderNumber}</h3>
-                <Badge variant="outline" className={`${status.bgColor} ${status.color} border`}>
-                  {status.label}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                <Calendar className="h-4 w-4" />
-                {formatDate(order.createdAt)}
-              </div>
-              <div className="flex items-center gap-4 mt-2 text-sm">
-                <span className="flex items-center gap-1">
-                  <Package2 className="h-4 w-4 text-muted-foreground" />
-                  {order.itemCount} бараа
-                </span>
-                <span className="text-muted-foreground">{order.paymentMethod}</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Amount & Actions */}
-          <div className="flex items-center justify-between sm:justify-end gap-4">
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Нийт дүн</p>
-              <p className="text-xl font-bold">{formatPrice(order.totalAmount)}</p>
-            </div>
-            <Button variant="outline" size="sm">
-              Дэлгэрэнгүй
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function OrdersPage() {
-  // Mock orders - replace with actual data from store/API
-  const [orders] = useState<Order[]>([
-    // Uncomment to test with mock data:
-    // {
-    //   id: '1',
-    //   orderNumber: 'ORD-2024-001',
-    //   createdAt: '2024-01-15T10:30:00Z',
-    //   status: 'delivered',
-    //   itemCount: 5,
-    //   totalAmount: 250000,
-    //   paymentMethod: 'Бэлэн мөнгө',
-    // },
-    // {
-    //   id: '2',
-    //   orderNumber: 'ORD-2024-002',
-    //   createdAt: '2024-01-18T14:45:00Z',
-    //   status: 'shipping',
-    //   itemCount: 3,
-    //   totalAmount: 180000,
-    //   paymentMethod: 'Карт',
-    // },
-    // {
-    //   id: '3',
-    //   orderNumber: 'ORD-2024-003',
-    //   createdAt: '2024-01-20T09:15:00Z',
-    //   status: 'pending',
-    //   itemCount: 8,
-    //   totalAmount: 420000,
-    //   paymentMethod: 'Банкны шилжүүлэг',
-    // },
-  ]);
-  
-  const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'confirmed' || o.status === 'shipping');
-  const completedOrders = orders.filter(o => o.status === 'delivered');
-  const cancelledOrders = orders.filter(o => o.status === 'cancelled');
-  
-  if (orders.length === 0) {
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Order detail sheet state
+  const [selectedOrderUuid, setSelectedOrderUuid] = useState<string | null>(null);
+  const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | undefined>();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const router = useRouter();
+
+  // Handle row click to navigate to detail page
+  const handleRowClick = (order: OrderListItem) => {
+    router.push(`/dashboard/orders/${order.uuid}`);
+  };
+
+  const fetchOrders = useCallback(async (pageNum: number = 1) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const client = getClient();
+      if (!client?.corporate_id) {
+        throw new Error('Нэвтрэх шаардлагатай');
+      }
+
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: client.corporate_id,
+          page: pageNum,
+          pageSize,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Захиалгын мэдээлэл татахад алдаа гарлаа');
+      }
+
+      const data: OrderListResponse = await response.json();
+      setOrders(data.orders || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      setPage(data.page || pageNum);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Алдаа гарлаа');
+      setOrders([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pageSize]);
+
+  useEffect(() => {
+    fetchOrders(1);
+  }, [fetchOrders]);
+
+  // Filter orders by search query
+  const filteredOrders = orders.filter((order) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
     return (
-      <div className="p-4 md:p-6 lg:p-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center gap-3">
-          <FileText className="h-7 w-7" />
-          Миний захиалгууд
-        </h1>
-        <EmptyOrders />
-      </div>
+      order.orderNumber?.toLowerCase().includes(query) ||
+      order.companyName?.toLowerCase().includes(query) ||
+      order.status?.toLowerCase().includes(query)
     );
-  }
-  
+  });
+
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-          <FileText className="h-7 w-7" />
-          Миний захиалгууд
-        </h1>
-        <Button asChild>
-          <Link href="/dashboard/products">
-            <ShoppingBag className="mr-2 h-4 w-4" />
-            Шинэ захиалга
-          </Link>
-        </Button>
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <FileText className="h-6 w-6" />
+            Захиалгууд
+          </h1>
+          <p className="text-muted-foreground">
+            Сүүлийн 30 хоногийн захиалгын түүх
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button asChild variant="default">
+            <Link href="/dashboard/products">
+              <ShoppingBag className="h-4 w-4 mr-2" />
+              Шинэ захиалга
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => fetchOrders(page)}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Шинэчлэх
+          </Button>
+        </div>
       </div>
-      
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 mb-6">
-          <TabsTrigger value="all">
-            Бүгд ({orders.length})
-          </TabsTrigger>
-          <TabsTrigger value="pending">
-            Идэвхтэй ({pendingOrders.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed">
-            Дууссан ({completedOrders.length})
-          </TabsTrigger>
-          <TabsTrigger value="cancelled">
-            Цуцлагдсан ({cancelledOrders.length})
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="all" className="space-y-4">
-          {orders.map((order) => (
-            <OrderCard key={order.id} order={order} />
-          ))}
-        </TabsContent>
-        
-        <TabsContent value="pending" className="space-y-4">
-          {pendingOrders.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Идэвхтэй захиалга байхгүй байна
-              </CardContent>
-            </Card>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Нийт захиалга</CardDescription>
+            <CardTitle className="text-2xl">{total}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Энэ хуудсанд</CardDescription>
+            <CardTitle className="text-2xl">{orders.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Хуудас</CardDescription>
+            <CardTitle className="text-2xl">{page} / {totalPages}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <div className="flex gap-2">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Захиалгын дугаар, харилцагч хайх..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Error State */}
+      {error && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Orders Table */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <OrdersTableSkeleton />
+          ) : filteredOrders.length === 0 ? (
+            <EmptyOrders />
           ) : (
-            pendingOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-32">Дугаар</TableHead>
+                    <TableHead className="w-28">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        Огноо
+                      </div>
+                    </TableHead>
+                    <TableHead>Харилцагч</TableHead>
+                    <TableHead className="text-right">Дүн</TableHead>
+                    <TableHead className="w-32 text-center">Хөнгөлөлт</TableHead>
+                    <TableHead className="w-28">Агуулах</TableHead>
+                    <TableHead className="w-28">Төлөв</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((order) => (
+                    <TableRow
+                      key={order.id || order.uuid}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleRowClick(order)}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span className="text-primary">{order.orderNumber || '-'}</span>
+                          {order.companyCode && (
+                            <span className="text-xs text-muted-foreground">{order.companyCode}</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(order.date)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium truncate max-w-[200px]">{order.companyName || '-'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-lg">{formatPrice(order.totalAmount || 0)}</span>
+                          {order.loan && (
+                            <Badge variant="outline" className="text-xs mt-1 border-orange-300 text-orange-600">
+                              <CreditCard className="h-3 w-3 mr-1" />
+                              Зээл
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <div className="flex items-center justify-center gap-1">
+                            {/* Discount Badge */}
+                            {order.totalDiscountPoint && order.totalDiscountPoint.totalAmount > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-help">
+                                    <Percent className="h-3 w-3 mr-1" />
+                                    {formatPrice(order.totalDiscountPoint.totalAmount)}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-sm">Хөнгөлөлт</p>
+                                    {order.totalDiscountPoint.discountList?.map((d, i) => (
+                                      <div key={i} className="text-xs">
+                                        <span className="font-medium">{d.discountPointName}</span>
+                                        <span className="text-muted-foreground ml-2">{formatPrice(d.discountPointAmount)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* Promo Badge */}
+                            {order.totalPromoPoint && order.totalPromoPoint.totalPromoAmount > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200 cursor-help">
+                                    <Gift className="h-3 w-3 mr-1" />
+                                    {formatPrice(order.totalPromoPoint.totalPromoAmount)}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-sm">Промо урамшуулал</p>
+                                    {order.totalPromoPoint.PromoList?.map((p, i) => (
+                                      <div key={i} className="text-xs">
+                                        <span className="font-medium">{p.promoName}</span>
+                                        <span className="text-muted-foreground ml-2">{formatPrice(p.amount)}</span>
+                                        <div className="text-muted-foreground">
+                                          {p.startDate} - {p.endDate}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {/* No discount/promo */}
+                            {(!order.totalDiscountPoint || order.totalDiscountPoint.totalAmount === 0) &&
+                              (!order.totalPromoPoint || order.totalPromoPoint.totalPromoAmount === 0) && (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                          </div>
+                        </TooltipProvider>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                          <Warehouse className="h-3 w-3" />
+                          <span className="truncate max-w-[80px]">{order.warehouseName || '-'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {order.poster && (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                          {getStatusBadge(order.status || 'Шинэ')}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
-        </TabsContent>
-        
-        <TabsContent value="completed" className="space-y-4">
-          {completedOrders.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Дууссан захиалга байхгүй байна
-              </CardContent>
-            </Card>
-          ) : (
-            completedOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))
-          )}
-        </TabsContent>
-        
-        <TabsContent value="cancelled" className="space-y-4">
-          {cancelledOrders.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Цуцлагдсан захиалга байхгүй байна
-              </CardContent>
-            </Card>
-          ) : (
-            cancelledOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchOrders(page - 1)}
+            disabled={page <= 1 || isLoading}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Өмнөх
+          </Button>
+          <span className="text-sm text-muted-foreground px-4">
+            Хуудас {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchOrders(page + 1)}
+            disabled={page >= totalPages || isLoading}
+          >
+            Дараах
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Order Detail Sheet */}
+      <OrderDetailSheet
+        orderUuid={selectedOrderUuid}
+        orderNumber={selectedOrderNumber}
+        open={isSheetOpen}
+        onOpenChange={setIsSheetOpen}
+      />
     </div>
   );
 }

@@ -18,12 +18,13 @@ export interface Warehouse {
 // ERP Details type
 export interface ErpDetails {
   routeId: string;
+  appLastVersion?: string;
   routeName: string;
   routeIMEI: string;
   routeRange: string;
   routeBussinesRegion: string | null;
   warehouses: Warehouse[];
-  imeiCode?: Array<{ routeIMEI: string }>;
+  imeiCode?: string[];
 }
 
 // Warehouse State
@@ -32,11 +33,11 @@ interface WarehouseState {
   warehouses: Warehouse[];
   selectedWarehouse: Warehouse | null;
   erpDetails: ErpDetails | null;
-  
+
   // Computed
   hasWarehouses: boolean;
   hasSelectedWarehouse: boolean;
-  
+
   // Actions
   setErpDetails: (erpDetails: ErpDetails) => void;
   setWarehouses: (warehouses: Warehouse[]) => void;
@@ -45,7 +46,7 @@ interface WarehouseState {
   selectDefaultWarehouse: () => void;
   clearWarehouse: () => void;
   clearAll: () => void;
-  
+
   // Getters
   getSelectedWarehouseId: () => string | null;
   getSelectedPriceTypeId: () => string | null;
@@ -60,7 +61,7 @@ export const useWarehouseStore = create<WarehouseState>()(
       warehouses: [],
       selectedWarehouse: null,
       erpDetails: null,
-      
+
       // Computed (derived from state)
       get hasWarehouses() {
         return get().warehouses.length > 0;
@@ -68,14 +69,14 @@ export const useWarehouseStore = create<WarehouseState>()(
       get hasSelectedWarehouse() {
         return get().selectedWarehouse !== null;
       },
-      
+
       // Actions
       setErpDetails: (erpDetails: ErpDetails) => {
-        set({ 
+        set({
           erpDetails,
           warehouses: erpDetails.warehouses || [],
         });
-        
+
         // Auto-select default warehouse if none selected
         const current = get().selectedWarehouse;
         if (!current && erpDetails.warehouses?.length > 0) {
@@ -83,10 +84,10 @@ export const useWarehouseStore = create<WarehouseState>()(
           set({ selectedWarehouse: defaultWh });
         }
       },
-      
+
       setWarehouses: (warehouses: Warehouse[]) => {
         set({ warehouses });
-        
+
         // Auto-select default warehouse if none selected
         const current = get().selectedWarehouse;
         if (!current && warehouses.length > 0) {
@@ -94,18 +95,18 @@ export const useWarehouseStore = create<WarehouseState>()(
           set({ selectedWarehouse: defaultWh });
         }
       },
-      
+
       selectWarehouse: (warehouse: Warehouse) => {
         set({ selectedWarehouse: warehouse });
       },
-      
+
       selectWarehouseById: (uuid: string) => {
         const warehouse = get().warehouses.find(w => w.uuid === uuid);
         if (warehouse) {
           set({ selectedWarehouse: warehouse });
         }
       },
-      
+
       selectDefaultWarehouse: () => {
         const { warehouses } = get();
         if (warehouses.length > 0) {
@@ -113,32 +114,32 @@ export const useWarehouseStore = create<WarehouseState>()(
           set({ selectedWarehouse: defaultWh });
         }
       },
-      
+
       clearWarehouse: () => {
         set({ selectedWarehouse: null });
       },
-      
+
       clearAll: () => {
-        set({ 
+        set({
           warehouses: [],
           selectedWarehouse: null,
           erpDetails: null,
         });
       },
-      
+
       // Getters
       getSelectedWarehouseId: () => {
         return get().selectedWarehouse?.uuid || null;
       },
-      
+
       getSelectedPriceTypeId: () => {
         return get().selectedWarehouse?.priceTypeId || null;
       },
-      
+
       getRouteId: () => {
         return get().erpDetails?.routeId || null;
       },
-      
+
       getRouteName: () => {
         return get().erpDetails?.routeName || null;
       },

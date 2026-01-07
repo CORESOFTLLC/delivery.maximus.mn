@@ -4,12 +4,12 @@ import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  Package, 
-  Users, 
-  ShoppingCart, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  ShoppingCart,
+  Settings,
   LogOut,
   Menu,
   Building2,
@@ -17,7 +17,8 @@ import {
   AlertTriangle,
   Warehouse,
   ChevronDown,
-  Check
+  Check,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,7 +50,7 @@ import {
 // Hook for hydration-safe client-side rendering
 function useHydrated() {
   return useSyncExternalStore(
-    () => () => {},
+    () => () => { },
     () => true,
     () => false
   );
@@ -59,6 +60,7 @@ const navigation = [
   { name: 'Хяналтын самбар', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Бараа материал', href: '/dashboard/products', icon: Package },
   { name: 'Харилцагчид', href: '/dashboard/partners', icon: Users },
+  { name: 'Захиалгууд', href: '/dashboard/orders', icon: FileText },
   { name: 'Сагс', href: '/dashboard/cart', icon: ShoppingCart },
   { name: 'Тохиргоо', href: '/dashboard/settings', icon: Settings },
 ];
@@ -68,7 +70,7 @@ function SelectedPartnerBadge({ onClear }: { onClear: () => void }) {
   const { selectedPartner, hasPartner, totalItems } = useCartStore();
   const isHydrated = useHydrated();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  
+
   if (!isHydrated || !hasPartner || !selectedPartner) return null;
 
   const handleClearClick = (e: React.MouseEvent) => {
@@ -85,7 +87,7 @@ function SelectedPartnerBadge({ onClear }: { onClear: () => void }) {
     setShowConfirmDialog(false);
     onClear();
   };
-  
+
   return (
     <>
       <div className="mx-3 mb-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
@@ -118,14 +120,14 @@ function SelectedPartnerBadge({ onClear }: { onClear: () => void }) {
               Харилцагч хасах уу?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-medium text-foreground">{selectedPartner.name}</span> харилцагчийг хасахад 
-              таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно. 
+              <span className="font-medium text-foreground">{selectedPartner.name}</span> харилцагчийг хасахад
+              таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно.
               Та үргэлжлүүлэх үү?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Үгүй, буцах</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmClear}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -184,8 +186,8 @@ function WarehouseSelector() {
       <div className="border-b px-4 py-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full justify-between gap-2 h-auto py-2"
             >
               <div className="flex items-center gap-2 truncate">
@@ -193,8 +195,8 @@ function WarehouseSelector() {
                 <div className="text-left truncate">
                   <p className="text-xs text-muted-foreground">Агуулах</p>
                   <p className="text-sm font-medium truncate">
-                    {selectedWarehouse 
-                      ? getWarehouseDisplayName(selectedWarehouse) 
+                    {selectedWarehouse
+                      ? getWarehouseDisplayName(selectedWarehouse)
                       : 'Сонгох'
                     }
                   </p>
@@ -243,13 +245,13 @@ function WarehouseSelector() {
               Агуулах солихоор сагс хоослогдоно
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Агуулах солиход таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно. 
+              Агуулах солиход таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно.
               Та үргэлжлүүлэх үү?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelClearCart}>Үгүй, буцах</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmClearCart}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -295,11 +297,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || 
+          const isActive = pathname === item.href ||
             (item.href !== '/dashboard' && pathname.startsWith(item.href));
           const isCart = item.href === '/dashboard/cart';
           const showBadge = isCart && isHydrated && totalItems > 0;
-          
+
           return (
             <Link
               key={item.name}
@@ -307,8 +309,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               className={cn(
                 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors relative',
-                isActive 
-                  ? 'bg-primary text-primary-foreground' 
+                isActive
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
@@ -339,8 +341,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
           </div>
         )}
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive"
           onClick={logout}
         >
@@ -377,11 +379,11 @@ function MobileHeader() {
           className="h-7 w-auto"
         />
       </Link>
-      
+
       <div className="flex items-center gap-2">
         {/* Cart Icon */}
         <CartIconButton />
-        
+
         {/* Menu */}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
@@ -404,7 +406,7 @@ function MobileHeader() {
 function CartIconButton() {
   const { totalItems } = useCartStore();
   const isHydrated = useHydrated();
-  
+
   return (
     <Link href="/dashboard/cart">
       <Button variant="ghost" size="icon" className="relative">
@@ -429,10 +431,10 @@ export default function DashboardLayout({
       <div className="min-h-screen bg-gray-50/50">
         {/* Desktop Sidebar */}
         <DesktopSidebar />
-        
+
         {/* Mobile Header */}
         <MobileHeader />
-        
+
         {/* Main Content */}
         <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
           {children}

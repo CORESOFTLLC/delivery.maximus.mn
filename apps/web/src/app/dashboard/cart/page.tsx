@@ -26,7 +26,7 @@ import {
 function SelectedPartnerCard() {
   const { selectedPartner, hasPartner, clearSelectedPartner, totalItems } = useCartStore();
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  
+
   if (!hasPartner || !selectedPartner) {
     return (
       <Card className="border-dashed border-2 border-muted-foreground/25">
@@ -62,7 +62,7 @@ function SelectedPartnerCard() {
     setShowConfirmDialog(false);
     clearSelectedPartner();
   };
-  
+
   return (
     <>
       <Card>
@@ -124,14 +124,14 @@ function SelectedPartnerCard() {
               Харилцагч хасах уу?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-medium text-foreground">{selectedPartner.name}</span> харилцагчийг хасахад 
-              таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно. 
+              <span className="font-medium text-foreground">{selectedPartner.name}</span> харилцагчийг хасахад
+              таны сагсанд байгаа <span className="font-medium text-foreground">{totalItems} бараа</span> устах болно.
               Та үргэлжлүүлэх үү?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Үгүй, буцах</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmClear}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -147,7 +147,7 @@ function SelectedPartnerCard() {
 // Empty Cart Component
 function EmptyCart() {
   const { hasPartner, selectedPartner } = useCartStore();
-  
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Show partner if selected */}
@@ -156,14 +156,14 @@ function EmptyCart() {
           <SelectedPartnerCard />
         </div>
       )}
-      
+
       <div className="flex flex-col items-center justify-center py-16 px-4">
         <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-6">
           <ShoppingCart className="h-12 w-12 text-muted-foreground" />
         </div>
         <h2 className="text-2xl font-semibold text-center mb-2">Таны сагс хоосон байна</h2>
         <p className="text-muted-foreground text-center mb-8 max-w-md">
-          {hasPartner 
+          {hasPartner
             ? `${selectedPartner?.name} дээр захиалга нэмнэ үү`
             : 'Бараа бүтээгдэхүүн нэмэхийн тулд каталог руу очно уу'
           }
@@ -183,7 +183,7 @@ function EmptyCart() {
 function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClick: (item: CartItem) => void }) {
   const { removeItem, incrementQuantity, decrementQuantity } = useCartStore();
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
-  
+
   const canIncrement = item.quantity < item.maxQuantity;
   const canDecrement = item.quantity > 1;
   const isLowStock = item.maxQuantity <= 5;
@@ -196,7 +196,7 @@ function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClic
     setShowRemoveConfirm(false);
     removeItem(item.productId);
   };
-  
+
   return (
     <>
       <div className="flex items-start gap-4 py-4 border-b last:border-b-0">
@@ -216,7 +216,7 @@ function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClic
             </div>
           )}
         </div>
-        
+
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
@@ -242,7 +242,7 @@ function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClic
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
-          
+
           {/* Price and Quantity */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
             <div className="flex items-center gap-2">
@@ -277,7 +277,7 @@ function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClic
                 </span>
               )}
             </div>
-            
+
             <div className="text-right">
               <p className="font-semibold">{item.formattedPrice}</p>
               {item.quantity > 1 && (
@@ -304,7 +304,7 @@ function CartItemRow({ item, onQuantityClick }: { item: CartItem; onQuantityClic
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Үгүй, буцах</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmRemove}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -322,7 +322,7 @@ function CartSummary() {
   const { items, formattedTotal, totalItems, validateCart, clearCart, selectedPartner } = useCartStore();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const validation = validateCart();
-  
+
   const formatPrice = (price: number): string => {
     return new Intl.NumberFormat('mn-MN', {
       style: 'decimal',
@@ -330,7 +330,7 @@ function CartSummary() {
       maximumFractionDigits: 0,
     }).format(price) + '₮';
   };
-  
+
   // Calculate line total for each item
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -342,7 +342,7 @@ function CartSummary() {
     setShowClearConfirm(false);
     clearCart();
   };
-  
+
   return (
     <Card className="sticky top-6">
       <CardHeader>
@@ -363,29 +363,29 @@ function CartSummary() {
             </div>
           ))}
         </div>
-        
+
         <Separator />
-        
+
         {/* Subtotal */}
         <div className="flex justify-between">
           <span className="text-muted-foreground">Дүн</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        
+
         {/* Shipping */}
         <div className="flex justify-between">
           <span className="text-muted-foreground">Хүргэлт</span>
           <span className="text-green-600">Үнэгүй</span>
         </div>
-        
+
         <Separator />
-        
+
         {/* Total */}
         <div className="flex justify-between items-center">
           <span className="font-semibold text-lg">Нийт</span>
           <span className="font-bold text-2xl text-primary">{formattedTotal}</span>
         </div>
-        
+
         {/* Validation errors */}
         {!validation.isValid && (
           <Alert variant="destructive">
@@ -397,7 +397,7 @@ function CartSummary() {
             </AlertDescription>
           </Alert>
         )}
-        
+
         {/* Warnings */}
         {validation.warnings.length > 0 && (
           <Alert>
@@ -411,13 +411,13 @@ function CartSummary() {
         )}
       </CardContent>
       <CardFooter className="flex flex-col gap-3">
-        <Button 
-          className="w-full" 
+        <Button
+          className="w-full"
           size="lg"
           disabled={!validation.isValid}
           asChild
         >
-          <Link href="/dashboard/checkout">
+          <Link href="/dashboard/checkout-v2">
             Захиалга баталгаажуулах
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
@@ -449,7 +449,7 @@ function CartSummary() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Үгүй, буцах</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmClearCart}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -468,23 +468,23 @@ export default function CartPage() {
   const [selectedItem, setSelectedItem] = useState<CartItem | null>(null);
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);
   const [keypadKey, setKeypadKey] = useState(0);
-  
+
   const handleQuantityClick = (item: CartItem) => {
     setSelectedItem(item);
     setKeypadKey(prev => prev + 1); // Increment to reset keypad
     setIsKeypadOpen(true);
   };
-  
+
   const handleQuantityConfirm = (quantity: number) => {
     if (selectedItem) {
       updateQuantity(selectedItem.productId, quantity);
     }
   };
-  
+
   if (isEmpty) {
     return <EmptyCart />;
   }
-  
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -498,33 +498,33 @@ export default function CartPage() {
           </Link>
         </Button>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
           {/* Selected Partner */}
           <SelectedPartnerCard />
-          
+
           {/* Cart Items Card */}
           <Card>
             <CardContent className="p-4 md:p-6">
               {items.map((item) => (
-                <CartItemRow 
-                  key={item.id} 
-                  item={item} 
+                <CartItemRow
+                  key={item.id}
+                  item={item}
                   onQuantityClick={handleQuantityClick}
                 />
               ))}
             </CardContent>
           </Card>
         </div>
-        
+
         {/* Order Summary */}
         <div className="lg:col-span-1">
           <CartSummary />
         </div>
       </div>
-      
+
       {/* Quantity Keypad Dialog */}
       <QuantityKeypad
         isOpen={isKeypadOpen}
