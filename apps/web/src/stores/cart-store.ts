@@ -6,6 +6,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Product, Partner } from '@/types';
+import { getProductImages } from '@/services/api';
+import { getToken } from '@/lib/auth';
 
 // Cart Item type
 export interface CartItem {
@@ -96,6 +98,7 @@ interface CartState {
   getItemByProductId: (productId: string) => CartItem | undefined;
   isInCart: (productId: string) => boolean;
   getItemQuantity: (productId: string) => number;
+  refreshCartImages: () => Promise<void>;
   
   // Validation
   validateCart: () => CartValidation;
@@ -183,7 +186,7 @@ export const useCartStore = create<CartState>()(
               formattedPrice: product.formatted_price,
               quantity: Math.min(quantity, product.current_stock),
               maxQuantity: product.current_stock,
-              imageUrl: product.main_image_url || null,
+              imageUrl: product.main_image_url || product.images?.[0] || null,
               category: product.category || null,
               addedAt: new Date().toISOString(),
             };
@@ -274,6 +277,32 @@ export const useCartStore = create<CartState>()(
       getItemQuantity: (productId: string) => {
         const item = get().getItemByProductId(productId);
         return item?.quantity || 0;
+      },
+
+      // Refresh cart item images from GraphQL
+      refreshCartImages: async () => {
+        const { items } = get();
+        if (items.length === 0) return;
+
+        // Get items without images (using productId as uuid)
+        const uuids = items.map(item => item.productId).filter(Boolean);
+        if (uuids.length === 0) return;
+
+        const token = getToken();
+        const imagesResult = await getProductImages(uuids, token || undefined);
+
+        if (imagesResult.success && imagesResult.data) {
+          set((state) => {
+            const updatedItems = state.items.map(item => {
+              const imageData = imagesResult.data?.get(item.productId);
+              if (imageData && imageData.main_image) {
+                return { ...item, imageUrl: imageData.main_image };
+              }
+              return item;
+            });
+            return { items: updatedItems };
+          });
+        }
       },
 
       // Validate cart before checkout

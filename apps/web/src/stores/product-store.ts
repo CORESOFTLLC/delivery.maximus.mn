@@ -3,7 +3,7 @@
  * Zustand store for managing products state
  */
 import { create } from 'zustand';
-import { getProducts, getCategories, getBrands } from '@/services/api';
+import { getProducts, getCategories, getBrands, getProductImages } from '@/services/api';
 import { getToken, getDefaultWarehouse } from '@/lib/auth';
 import type { Product, Category, PaginatorInfo } from '@/types';
 
@@ -32,7 +32,13 @@ function getStockStatus(stock: number): 'out_of_stock' | 'low_stock' | 'in_stock
 function getImageUrl(mainImage: string | null): string | null {
   if (!mainImage) return null;
   if (mainImage.startsWith('http')) return mainImage;
-  return `${IMAGE_BASE_URL}${mainImage}`;
+  // Handle both /products/... and products/... formats
+  let cleanPath = mainImage.startsWith('/') ? mainImage : `/${mainImage}`;
+  // Add /storage prefix if path starts with /products
+  if (cleanPath.startsWith('/products/')) {
+    cleanPath = `/storage${cleanPath}`;
+  }
+  return `${IMAGE_BASE_URL}${cleanPath}`;
 }
 
 function mapProduct(raw: {
@@ -172,7 +178,26 @@ export const useProductStore = create<ProductState>((set, get) => ({
       });
 
       if (result.success && result.data) {
-        const products = result.data.map(mapProduct);
+        let products = result.data.map(mapProduct);
+
+        // Fetch product images from cloud.maximus.mn GraphQL
+        const uuids = products.map(p => p.uuid).filter(Boolean);
+        if (uuids.length > 0) {
+          const imagesResult = await getProductImages(uuids, token || undefined);
+          if (imagesResult.success && imagesResult.data) {
+            products = products.map(product => {
+              const imageData = imagesResult.data?.get(product.uuid);
+              if (imageData) {
+                return {
+                  ...product,
+                  main_image_url: imageData.main_image || product.main_image_url,
+                  images: imageData.images.length > 0 ? imageData.images : product.images,
+                };
+              }
+              return product;
+            });
+          }
+        }
 
         if (page === 1) {
           set({ products, paginatorInfo: result.paginatorInfo, isLoading: false });
@@ -259,7 +284,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   // Set category filter (single)
   setCategory: (categoryId: string | null) => {
+    // Clear products immediately to show loading skeleton
     set((state) => ({
+      products: [],
+      isLoading: true,
       filters: { ...state.filters, categoryId },
     }));
     // Fetch brands for the selected category
@@ -273,7 +301,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   // Set multiple categories filter
   setCategories: (categoryIds: string[]) => {
+    // Clear products immediately to show loading skeleton
     set((state) => ({
+      products: [],
+      isLoading: true,
       filters: { ...state.filters, categoryIds, categoryId: categoryIds[0] || null },
     }));
     // Fetch brands for the first selected category
@@ -287,7 +318,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   // Set multiple brands filter
   setBrands: (brandIds: string[]) => {
+    // Clear products immediately to show loading skeleton
     set((state) => ({
+      products: [],
+      isLoading: true,
       filters: { ...state.filters, brandIds },
     }));
     get().fetchProducts(1);

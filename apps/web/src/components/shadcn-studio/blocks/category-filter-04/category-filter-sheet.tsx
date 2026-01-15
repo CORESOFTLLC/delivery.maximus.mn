@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sheet'
 
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/hooks/useTranslation'
 
 export type CategoryItem = {
   id: string
@@ -57,6 +58,7 @@ const CategoryFilterSheet = ({
   onCategoryChange,
   className 
 }: Props) => {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   
   const [filters, setFilters] = useState<FilterState>({
@@ -119,7 +121,7 @@ const CategoryFilterSheet = ({
         {trigger || (
           <Button variant='outline' className='gap-2'>
             <Filter className='h-4 w-4' />
-            Шүүлтүүр
+            {t('products.filterSheet.title')}
             {activeFiltersCount > 0 && (
               <Badge className='h-5 w-5 rounded-full p-0 flex items-center justify-center'>
                 {activeFiltersCount}
@@ -132,10 +134,10 @@ const CategoryFilterSheet = ({
         <SheetHeader className='px-0'>
           <SheetTitle className='flex items-center gap-2'>
             <Filter className='h-5 w-5' />
-            Шүүлтүүр
+            {t('products.filterSheet.title')}
           </SheetTitle>
           <SheetDescription>
-            Барааг шүүх үзүүлэлтүүдийг сонгоно уу
+            {t('products.filterSheet.description')}
           </SheetDescription>
         </SheetHeader>
 
@@ -143,7 +145,7 @@ const CategoryFilterSheet = ({
           {/* Category Filter */}
           <div className='space-y-3'>
             <div className='flex items-center gap-2'>
-              <h3 className='font-semibold text-sm'>Ангилал</h3>
+              <h3 className='font-semibold text-sm'>{t('products.filterSheet.category')}</h3>
               {filters.categories.length > 0 && (
                 <Badge variant='secondary' className='text-xs h-5 px-1.5'>
                   {filters.categories.length}
@@ -186,7 +188,7 @@ const CategoryFilterSheet = ({
               </div>
             ) : (
               <p className='text-sm text-muted-foreground'>
-                Ангилал олдсонгүй
+                {t('products.filterSheet.noCategory')}
               </p>
             )}
           </div>
@@ -194,7 +196,7 @@ const CategoryFilterSheet = ({
           {/* Brand Filter */}
           <div className='space-y-3'>
             <div className='flex items-center gap-2'>
-              <h3 className='font-semibold text-sm'>Брэнд</h3>
+              <h3 className='font-semibold text-sm'>{t('products.filterSheet.brand')}</h3>
               {filters.brands.length > 0 && (
                 <Badge variant='secondary' className='text-xs h-5 px-1.5'>
                   {filters.brands.length}
@@ -230,8 +232,8 @@ const CategoryFilterSheet = ({
             ) : (
               <p className='text-sm text-muted-foreground'>
                 {filters.categories.length > 0 
-                  ? 'Сонгосон ангилалд брэнд олдсонгүй' 
-                  : 'Брэнд олдсонгүй'}
+                  ? t('products.filterSheet.noBrandForCategory') 
+                  : t('products.filterSheet.noBrand')}
               </p>
             )}
           </div>
@@ -241,10 +243,10 @@ const CategoryFilterSheet = ({
         {activeFiltersCount > 0 && (
           <div className='border-t pt-4 space-y-2'>
             <div className='flex items-center justify-between'>
-              <span className='text-sm font-medium'>Сонгосон ({activeFiltersCount})</span>
+              <span className='text-sm font-medium'>{t('products.filterSheet.selected')} ({activeFiltersCount})</span>
               <Button variant='ghost' size='sm' onClick={handleClear} className='text-destructive h-8'>
                 <X className='h-4 w-4 mr-1' />
-                Цэвэрлэх
+                {t('products.filterSheet.clear')}
               </Button>
             </div>
             <div className='flex flex-wrap gap-1.5'>
@@ -279,11 +281,11 @@ const CategoryFilterSheet = ({
         <SheetFooter className='gap-2 pt-4 border-t'>
           <SheetClose asChild>
             <Button variant='outline' className='flex-1'>
-              Болих
+              {t('products.filterSheet.cancel')}
             </Button>
           </SheetClose>
           <Button onClick={handleApply} className='flex-1'>
-            Хэрэглэх
+            {t('products.filterSheet.apply')}
           </Button>
         </SheetFooter>
       </SheetContent>

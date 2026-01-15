@@ -25,15 +25,15 @@ export const TabsWithVerticalIcon = ({
   return (
     <div className={`w-full ${className}`}>
       <Tabs defaultValue={defaultValue || tabs[0]?.value} className="gap-4">
-        <TabsList className="h-full">
+        <TabsList className="h-full px-2 py-2 gap-1">
           {tabs.map(({ icon: Icon, name, value }) => (
             <TabsTrigger
               key={value}
               value={value}
-              className="flex flex-col items-center gap-1 px-2.5 sm:px-3"
+              className="flex flex-col items-center gap-1.5 px-4 py-2.5 sm:px-5 sm:py-3"
             >
-              <Icon className="size-4" />
-              {name}
+              <Icon className="size-4 sm:size-5" />
+              <span className="text-xs sm:text-sm">{name}</span>
             </TabsTrigger>
           ))}
         </TabsList>

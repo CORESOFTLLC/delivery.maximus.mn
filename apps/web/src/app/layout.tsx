@@ -38,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="mn" suppressHydrationWarning>
-      <body className={`${gip.variable} font-sans antialiased`}>
+    <html lang="mn" className="light" suppressHydrationWarning>
+      <body className={`${gip.variable} font-sans antialiased bg-white`}>
         {children}
         <Toaster 
           richColors 

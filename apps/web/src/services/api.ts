@@ -8,6 +8,20 @@ const GRAPHQL_URL = `${API_BASE_URL}/graphql`;
 // ERP requests go through local proxy to avoid CORS
 const ERP_URL = '/api/erp';
 
+// Image URL helper
+export function getProductImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http')) return imagePath;
+  // Handle both /products/... and products/... formats
+  // Backend stores as /products/... but serves from /storage/products/...
+  let cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  // Add /storage prefix if path starts with /products
+  if (cleanPath.startsWith('/products/')) {
+    cleanPath = `/storage${cleanPath}`;
+  }
+  return `${API_BASE_URL}${cleanPath}`;
+}
+
 interface GraphQLResponse<T = unknown> {
   data?: T;
   errors?: Array<{ message: string; extensions?: unknown }>;
@@ -429,4 +443,124 @@ export async function getPartner(
   }
 
   return { success: false, error: 'Харилцагч олдсонгүй' };
+}
+
+// ============================================================================
+// Product Images API (GraphQL - cloud.maximus.mn)
+// ============================================================================
+
+interface ProductImagesData {
+  uuid: string;
+  main_image: string | null;
+  images: string[];
+}
+
+/**
+ * Олон барааны зургуудыг GraphQL-ээр авах
+ * Uses batch aliased queries with the existing product(uuid) query
+ * @param productUuids - Барааны UUID-ууд
+ * @param token - Auth token
+ */
+export async function getProductImages(
+  productUuids: string[],
+  token?: string
+): Promise<{
+  success: boolean;
+  data?: Map<string, { main_image: string | null; images: string[] }>;
+  error?: string;
+}> {
+  if (!productUuids.length) {
+    return { success: true, data: new Map() };
+  }
+
+  // Build batch aliased query for fetching products by UUIDs
+  // Each product query is aliased as p0, p1, p2, etc.
+  const aliases = productUuids.map((uuid, index) => {
+    // Sanitize UUID for use as alias (replace hyphens with underscores)
+    return `p${index}: product(uuid: "${uuid}") { uuid main_image images }`;
+  });
+  
+  const query = `query GetProductImages { ${aliases.join(' ')} }`;
+
+  try {
+    const response = await graphqlRequest<Record<string, ProductImagesData | null>>(
+      query,
+      {},
+      token
+    );
+
+    if (response.errors?.length) {
+      console.error('[API] GraphQL errors:', response.errors);
+      // Don't fail completely - some products may not exist
+      // return { success: false, error: response.errors[0].message };
+    }
+
+    const imagesMap = new Map<string, { main_image: string | null; images: string[] }>();
+    
+    if (response.data) {
+      // Iterate through all aliases (p0, p1, p2, etc.)
+      for (const [alias, product] of Object.entries(response.data)) {
+        if (product && product.uuid) {
+          imagesMap.set(product.uuid, {
+            main_image: product.main_image ? getProductImageUrl(product.main_image) : null,
+            images: (product.images || []).map(img => getProductImageUrl(img) || '').filter(Boolean),
+          });
+        }
+      }
+    }
+
+    return { success: true, data: imagesMap };
+  } catch (error) {
+    console.error('[API] getProductImages error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+  }
+}
+
+/**
+ * Нэг барааны зургуудыг GraphQL-ээр авах
+ */
+export async function getProductImagesByUuid(
+  uuid: string,
+  token?: string
+): Promise<{
+  success: boolean;
+  data?: { main_image: string | null; images: string[] };
+  error?: string;
+}> {
+  const query = `
+    query GetProduct($uuid: String!) {
+      product(uuid: $uuid) {
+        uuid
+        main_image
+        images
+      }
+    }
+  `;
+
+  try {
+    const response = await graphqlRequest<{ product: ProductImagesData | null }>(
+      query,
+      { uuid },
+      token
+    );
+
+    if (response.errors?.length) {
+      return { success: false, error: response.errors[0].message };
+    }
+
+    if (!response.data?.product) {
+      return { success: false, error: 'Бараа олдсонгүй' };
+    }
+
+    const product = response.data.product;
+    return {
+      success: true,
+      data: {
+        main_image: product.main_image ? getProductImageUrl(product.main_image) : null,
+        images: (product.images || []).map(img => getProductImageUrl(img) || '').filter(Boolean),
+      },
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+  }
 }
