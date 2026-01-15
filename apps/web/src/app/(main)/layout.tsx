@@ -87,7 +87,7 @@ function TopNavBar() {
   // Kiosk navigation - with translations
   const kioskNavigation = [
     { name: t('nav.products'), href: '/products', icon: Package },
-    { name: t('nav.partners'), href: '/partners', icon: Users },
+    // { name: t('nav.partners'), href: '/partners', icon: Users }, // Түр хасав
     { name: t('nav.orders'), href: '/orders', icon: FileText },
   ];
 
@@ -298,6 +298,13 @@ export default function MainLayout({
           <main className="pt-16 min-h-screen">
             {children}
           </main>
+
+          {/* Footer with Version */}
+          <footer className="fixed bottom-0 left-0 right-0 py-1 bg-gray-50/80 backdrop-blur-sm border-t border-gray-100">
+            <div className="text-center text-xs text-gray-400">
+              MAXIMUS KIOSK v1.0.1
+            </div>
+          </footer>
         </div>
       </KioskWrapper>
     </AuthGuard>

@@ -159,5 +159,5 @@ export const useWarehouseStore = create<WarehouseState>()(
 // Helper: Get warehouse display info
 export function getWarehouseDisplayName(warehouse: Warehouse | null): string {
   if (!warehouse) return 'Агуулах сонгоогүй';
-  return warehouse.name + (warehouse.isSale ? ' (Борлуулалт)' : '');
+  return warehouse.name + (warehouse.isSale ? ' (Хямдралтай)' : '');
 }

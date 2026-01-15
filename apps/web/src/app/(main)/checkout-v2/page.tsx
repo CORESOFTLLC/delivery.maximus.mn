@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import confetti from 'canvas-confetti';
 import {
     ArrowLeft,
     ArrowRight,
@@ -62,8 +63,18 @@ const PAYMENT_TYPES: Record<string, number> = {
 };
 
 const DELIVERY_TYPES: Record<string, number> = {
-    pickup: 1,
-    delivery: 2,
+    office_pickup: 1,      // Оффисын бараа авах цэгээс авах
+    warehouse_pickup: 2,   // Агуулахаас өөрөө очиж авах
+    desk_delivery: 3,      // Ширээн дээр хүргүүлэх +2000₮
+};
+
+// Delivery fee for desk delivery
+const DESK_DELIVERY_FEE = 2000;
+
+// Priority types
+const PRIORITY_TYPES: Record<string, number> = {
+    normal: 1,
+    urgent: 2,
 };
 
 // Step definitions - will be populated with translations in component
@@ -78,6 +89,42 @@ function formatCurrency(amount: number): string {
     }).format(amount) + '₮';
 }
 
+// Celebration confetti burst
+function triggerCelebration() {
+    const duration = 3000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+    function randomInRange(min: number, max: number) {
+        return Math.random() * (max - min) + min;
+    }
+
+    const interval = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+            return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+
+        // Burst from left
+        confetti({
+            ...defaults,
+            particleCount,
+            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+            colors: ['#ff6b35', '#f7931e', '#ffd700', '#00d4aa', '#0099ff', '#9b59b6'],
+        });
+        // Burst from right
+        confetti({
+            ...defaults,
+            particleCount,
+            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+            colors: ['#ff6b35', '#f7931e', '#ffd700', '#00d4aa', '#0099ff', '#9b59b6'],
+        });
+    }, 250);
+}
+
 export default function MultiStepCheckoutPage() {
     const router = useRouter();
     const { t } = useTranslation();
@@ -85,6 +132,7 @@ export default function MultiStepCheckoutPage() {
     const [currentStep, setCurrentStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderUuid, setOrderUuid] = useState<string | null>(null);
+    const [orderNumber, setOrderNumber] = useState<string | null>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     
     // Quantity edit keypad state
@@ -121,9 +169,11 @@ export default function MultiStepCheckoutPage() {
 
     // Step 1: Order form data
     const [paymentMethod, setPaymentMethod] = useState<string>('cash');
-    const [deliveryMethod, setDeliveryMethod] = useState<string>('delivery');
+    const [deliveryMethod, setDeliveryMethod] = useState<string>('office_pickup');
+    const [priority, setPriority] = useState<string>('normal');
     const [notes, setNotes] = useState('');
-    const [useDiscount, setUseDiscount] = useState(true);
+    // Discount is always disabled for kiosk
+    const useDiscount = false;
 
     // Step 2: Finish form data
     const [useLoan, setUseLoan] = useState(false);
@@ -179,7 +229,8 @@ export default function MultiStepCheckoutPage() {
     // Calculate totals
     const subtotal = totalAmount;
     const discount = 0; // Will be calculated from ERP
-    const total = subtotal - discount;
+    const deliveryFee = deliveryMethod === 'desk_delivery' ? DESK_DELIVERY_FEE : 0;
+    const total = subtotal - discount + deliveryFee;
 
     // Build order products
     const buildOrderProducts = useCallback(() => {
@@ -238,7 +289,7 @@ export default function MultiStepCheckoutPage() {
 
             if (result.success && result.uuid) {
                 setOrderStartDate(datetime);
-                return { uuid: result.uuid, datetime };
+                return { uuid: result.uuid, number: result.number, datetime };
             } else {
                 throw new Error(result.error || t('checkout.multiStep.orderCreateError'));
             }
@@ -325,6 +376,7 @@ export default function MultiStepCheckoutPage() {
 
                 if (result) {
                     setOrderUuid(result.uuid);
+                    setOrderNumber(result.number || null);
                     toast.success(t('checkout.multiStep.orderCreated'), { id: 'order-progress' });
                     setCurrentStep(2);
                 }
@@ -347,6 +399,9 @@ export default function MultiStepCheckoutPage() {
                 const success = await finishOrder(orderUuid, orderStartDate);
 
                 if (success) {
+                    // 🎉 Trigger celebration confetti!
+                    triggerCelebration();
+                    
                     toast.success(t('checkout.multiStep.orderSuccess'), {
                         id: 'order-progress',
                         duration: 5000,
@@ -669,32 +724,46 @@ export default function MultiStepCheckoutPage() {
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
                                         <Truck className="h-5 w-5" />
-                                        {t('checkout.multiStep.deliveryType')}
+                                        {t('checkout.multiStep.pickupMethod')}
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod}>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-3">
                                             <Label
-                                                htmlFor="delivery"
-                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${deliveryMethod === 'delivery' ? 'border-primary bg-primary/5' : ''
+                                                htmlFor="office_pickup"
+                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${deliveryMethod === 'office_pickup' ? 'border-primary bg-primary/5' : ''
                                                     }`}
                                             >
-                                                <RadioGroupItem value="delivery" id="delivery" />
-                                                <div>
-                                                    <p className="font-medium">{t('checkout.multiStep.delivery')}</p>
-                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.deliveryDescription')}</p>
+                                                <RadioGroupItem value="office_pickup" id="office_pickup" />
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{t('checkout.multiStep.officePickup')}</p>
+                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.officePickupDescription')}</p>
                                                 </div>
                                             </Label>
                                             <Label
-                                                htmlFor="pickup"
-                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${deliveryMethod === 'pickup' ? 'border-primary bg-primary/5' : ''
+                                                htmlFor="warehouse_pickup"
+                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${deliveryMethod === 'warehouse_pickup' ? 'border-primary bg-primary/5' : ''
                                                     }`}
                                             >
-                                                <RadioGroupItem value="pickup" id="pickup" />
-                                                <div>
-                                                    <p className="font-medium">{t('checkout.multiStep.pickup')}</p>
-                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.pickupDescription')}</p>
+                                                <RadioGroupItem value="warehouse_pickup" id="warehouse_pickup" />
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{t('checkout.multiStep.warehousePickup')}</p>
+                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.warehousePickupDescription')}</p>
+                                                </div>
+                                            </Label>
+                                            <Label
+                                                htmlFor="desk_delivery"
+                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${deliveryMethod === 'desk_delivery' ? 'border-primary bg-primary/5' : ''
+                                                    }`}
+                                            >
+                                                <RadioGroupItem value="desk_delivery" id="desk_delivery" />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-medium">{t('checkout.multiStep.deskDelivery')}</p>
+                                                        <Badge variant="secondary" className="text-xs">+2,000₮</Badge>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.deskDeliveryDescription')}</p>
                                                 </div>
                                             </Label>
                                         </div>
@@ -702,26 +771,50 @@ export default function MultiStepCheckoutPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* Options */}
+                            {/* Priority */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <AlertCircle className="h-5 w-5" />
+                                        {t('checkout.multiStep.priority')}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <RadioGroup value={priority} onValueChange={setPriority}>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <Label
+                                                htmlFor="normal"
+                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${priority === 'normal' ? 'border-primary bg-primary/5' : ''
+                                                    }`}
+                                            >
+                                                <RadioGroupItem value="normal" id="normal" />
+                                                <div>
+                                                    <p className="font-medium">{t('checkout.multiStep.priorityNormal')}</p>
+                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.priorityNormalDescription')}</p>
+                                                </div>
+                                            </Label>
+                                            <Label
+                                                htmlFor="urgent"
+                                                className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-colors ${priority === 'urgent' ? 'border-orange-500 bg-orange-50' : ''
+                                                    }`}
+                                            >
+                                                <RadioGroupItem value="urgent" id="urgent" />
+                                                <div>
+                                                    <p className="font-medium text-orange-600">{t('checkout.multiStep.priorityUrgent')}</p>
+                                                    <p className="text-xs text-muted-foreground">{t('checkout.multiStep.priorityUrgentDescription')}</p>
+                                                </div>
+                                            </Label>
+                                        </div>
+                                    </RadioGroup>
+                                </CardContent>
+                            </Card>
+
+                            {/* Notes */}
                             <Card>
                                 <CardHeader>
                                     <CardTitle>{t('checkout.multiStep.settings')}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <Percent className="h-4 w-4 text-orange-500" />
-                                            <Label htmlFor="discount">{t('checkout.multiStep.useDiscount')}</Label>
-                                        </div>
-                                        <Switch
-                                            id="discount"
-                                            checked={useDiscount}
-                                            onCheckedChange={setUseDiscount}
-                                        />
-                                    </div>
-
-                                    <Separator />
-
                                     <div>
                                         <Label htmlFor="notes">{t('checkout.multiStep.notes')}</Label>
                                         <Textarea
@@ -748,7 +841,7 @@ export default function MultiStepCheckoutPage() {
                                         {t('checkout.multiStep.orderCreated')}
                                     </CardTitle>
                                     <CardDescription>
-                                        UUID: <code className="bg-muted px-2 py-0.5 rounded text-xs">{orderUuid}</code>
+                                        Захиалгын дугаар: <code className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-base font-bold">{orderNumber || orderUuid}</code>
                                     </CardDescription>
                                 </CardHeader>
                             </Card>
@@ -840,8 +933,18 @@ export default function MultiStepCheckoutPage() {
                                             <Badge variant="default">true</Badge>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">useDiscount</span>
-                                            <Badge variant={useDiscount ? 'default' : 'secondary'}>{useDiscount ? 'true' : 'false'}</Badge>
+                                            <span className="text-muted-foreground">{t('checkout.multiStep.pickupMethod')}</span>
+                                            <Badge variant="outline">
+                                                {deliveryMethod === 'office_pickup' && t('checkout.multiStep.officePickup')}
+                                                {deliveryMethod === 'warehouse_pickup' && t('checkout.multiStep.warehousePickup')}
+                                                {deliveryMethod === 'desk_delivery' && t('checkout.multiStep.deskDelivery')}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">{t('checkout.multiStep.priority')}</span>
+                                            <Badge variant={priority === 'urgent' ? 'destructive' : 'secondary'}>
+                                                {priority === 'urgent' ? t('checkout.multiStep.priorityUrgent') : t('checkout.multiStep.priorityNormal')}
+                                            </Badge>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">loan</span>
@@ -875,6 +978,12 @@ export default function MultiStepCheckoutPage() {
                                     <span>-{formatCurrency(discount)}</span>
                                 </div>
                             )}
+                            {deliveryFee > 0 && (
+                                <div className="flex justify-between text-sm text-blue-600">
+                                    <span>{t('checkout.multiStep.deliveryFee')}</span>
+                                    <span>+{formatCurrency(deliveryFee)}</span>
+                                </div>
+                            )}
                             <Separator />
                             <div className="flex justify-between text-lg font-bold">
                                 <span>{t('checkout.multiStep.total')}</span>
@@ -895,30 +1004,49 @@ export default function MultiStepCheckoutPage() {
                     </Card>
 
                     {/* Navigation Buttons */}
-                    <div className="flex flex-col gap-2">
-                        <Button
-                            onClick={handleNext}
-                            disabled={isSubmitting || (currentStep === 0 && items.length === 0)}
-                            className="w-full"
-                            size="lg"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    {t('checkout.multiStep.loading')}
-                                </>
-                            ) : currentStep === 2 ? (
-                                <>
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    {t('checkout.multiStep.confirmOrder')}
-                                </>
-                            ) : (
-                                <>
-                                    {t('checkout.multiStep.continue')}
-                                    <ArrowRight className="h-4 w-4 ml-2" />
-                                </>
-                            )}
-                        </Button>
+                    <div className="flex flex-col gap-3">
+                        {currentStep === 2 ? (
+                            // Special fancy confirm button for final step
+                            <Button
+                                onClick={handleNext}
+                                disabled={isSubmitting}
+                                className="w-full h-16 text-base font-bold bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 hover:from-orange-600 hover:via-orange-700 hover:to-amber-600 shadow-lg shadow-orange-500/30 hover:shadow-orange-600/40 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] border-2 border-orange-400/50 rounded-xl animate-pulse hover:animate-none"
+                                size="lg"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                        <span className="text-sm">{t('checkout.multiStep.loading')}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="h-5 w-5 mr-2" />
+                                        <span className="text-sm">{t('checkout.multiStep.confirmOrder')}</span>
+                                        <span className="ml-2 text-lg">🎉</span>
+                                    </>
+                                )}
+                            </Button>
+                        ) : (
+                            // Regular button for other steps
+                            <Button
+                                onClick={handleNext}
+                                disabled={isSubmitting || (currentStep === 0 && items.length === 0)}
+                                className="w-full"
+                                size="lg"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        {t('checkout.multiStep.loading')}
+                                    </>
+                                ) : (
+                                    <>
+                                        {t('checkout.multiStep.continue')}
+                                        <ArrowRight className="h-4 w-4 ml-2" />
+                                    </>
+                                )}
+                            </Button>
+                        )}
 
                         {currentStep > 0 && (
                             <Button

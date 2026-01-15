@@ -100,8 +100,9 @@ function ProductCard({ product, onProductClick }: { product: Product; onProductC
     out_of_stock: t('products.stockStatus.outOfStock'),
   };
 
-  // Format stock number with thousands separator
+  // Format stock number - show 1000+ for large quantities
   const formatStock = (stock: number) => {
+    if (stock >= 1000) return '1000+';
     return new Intl.NumberFormat('mn-MN').format(stock);
   };
 
@@ -233,6 +234,7 @@ function ProductListCard({ product, onProductClick }: { product: Product; onProd
 
   const formatStock = (stock: number | null) => {
     if (stock === null || stock === undefined) return '-';
+    if (stock >= 1000) return '1000+';
     return stock.toLocaleString();
   };
 
