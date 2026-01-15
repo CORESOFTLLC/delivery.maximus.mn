@@ -43,7 +43,7 @@ export default function RootLayout({
         {children}
         <Toaster 
           richColors 
-          position="top-right" 
+          position="top-center" 
           toastOptions={{
             style: {
               fontFamily: 'var(--font-gip)',

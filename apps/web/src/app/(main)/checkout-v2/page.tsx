@@ -28,6 +28,7 @@ import {
 import { useTranslation } from '@/hooks/useTranslation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { QuantityKeypad } from '@/components/cart/QuantityKeypad';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { Stepper, StepperStep } from '@/components/ui/stepper';
 import { useCartStore } from '@/stores/cart-store';
+import { useWarehouseStore } from '@/stores/warehouse-store';
 import { getUser } from '@/lib/auth';
 import {
     AlertDialog,
@@ -84,6 +86,11 @@ export default function MultiStepCheckoutPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderUuid, setOrderUuid] = useState<string | null>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+    
+    // Quantity edit keypad state
+    const [editingItem, setEditingItem] = useState<{ productId: string; name: string; quantity: number; maxStock: number } | null>(null);
+    const [isKeypadOpen, setIsKeypadOpen] = useState(false);
+    const [keypadKey, setKeypadKey] = useState(0);
 
     // Cart store - includes selectedPartner
     const {
@@ -98,13 +105,16 @@ export default function MultiStepCheckoutPage() {
         refreshCartImages,
     } = useCartStore();
 
-    // Selected warehouse (hardcoded for now, will come from settings later)
-    const [selectedWarehouse] = useState({
+    // Get selected warehouse from store
+    const { selectedWarehouse: warehouseFromStore } = useWarehouseStore();
+    
+    // Use warehouse from store or fallback to default
+    const selectedWarehouse = warehouseFromStore || {
         uuid: '5a811d4a-6dc5-11e6-9c23-3085a97c20be',
         name: 'Үндсэн агуулах',
         priceTypeId: 'ee731f38-6e58-11e6-9c23-3085a97c20be',
         isSale: false,
-    });
+    };
 
     // ERP details
     const [erpDetails] = useState<{ routeIMEI?: string } | null>(null);
@@ -366,8 +376,72 @@ export default function MultiStepCheckoutPage() {
 
     if (!mounted) {
         return (
-            <div className="flex items-center justify-center min-h-[50vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto animate-pulse">
+                {/* Header Skeleton */}
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="h-10 w-10 bg-gray-200 rounded-lg" />
+                    <div className="space-y-2">
+                        <div className="h-7 w-48 bg-gray-200 rounded" />
+                        <div className="h-4 w-32 bg-gray-100 rounded" />
+                    </div>
+                </div>
+
+                {/* Stepper Skeleton */}
+                <div className="bg-white rounded-xl border p-6 mb-6">
+                    <div className="flex items-center justify-between">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="flex items-center gap-3">
+                                <div className="h-10 w-10 bg-gray-200 rounded-full" />
+                                <div className="hidden sm:block space-y-1">
+                                    <div className="h-4 w-20 bg-gray-200 rounded" />
+                                    <div className="h-3 w-28 bg-gray-100 rounded" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Content Skeleton */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Main Content */}
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="bg-white rounded-xl border p-6">
+                            <div className="h-6 w-32 bg-gray-200 rounded mb-4" />
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-center gap-4 py-3 border-b last:border-b-0">
+                                    <div className="h-16 w-16 bg-gray-200 rounded-lg" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                                        <div className="h-3 w-1/2 bg-gray-100 rounded" />
+                                    </div>
+                                    <div className="h-5 w-20 bg-gray-200 rounded" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Sidebar */}
+                    <div className="space-y-4">
+                        <div className="bg-white rounded-xl border p-6">
+                            <div className="h-6 w-24 bg-gray-200 rounded mb-4" />
+                            <div className="space-y-3">
+                                <div className="flex justify-between">
+                                    <div className="h-4 w-20 bg-gray-100 rounded" />
+                                    <div className="h-4 w-24 bg-gray-200 rounded" />
+                                </div>
+                                <div className="flex justify-between">
+                                    <div className="h-4 w-16 bg-gray-100 rounded" />
+                                    <div className="h-4 w-20 bg-gray-200 rounded" />
+                                </div>
+                                <div className="border-t pt-3 flex justify-between">
+                                    <div className="h-5 w-12 bg-gray-200 rounded" />
+                                    <div className="h-5 w-28 bg-gray-300 rounded" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="h-12 w-full bg-gray-300 rounded-xl" />
+                    </div>
+                </div>
             </div>
         );
     }
@@ -430,9 +504,9 @@ export default function MultiStepCheckoutPage() {
                                     <div className="space-y-4">
                                         {items.map((item) => (
                                             <div key={item.productId} className="flex items-center gap-4 p-4 rounded-lg border">
-                                                <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                                                <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden relative">
                                                     {item.imageUrl ? (
-                                                        <Image src={item.imageUrl} alt={item.name} width={64} height={64} className="w-full h-full object-cover" unoptimized />
+                                                        <Image src={item.imageUrl} alt={item.name} fill sizes="64px" className="object-cover" unoptimized />
                                                     ) : (
                                                         <Package className="h-8 w-8 text-muted-foreground" />
                                                     )}
@@ -450,7 +524,21 @@ export default function MultiStepCheckoutPage() {
                                                     >
                                                         <Minus className="h-4 w-4" />
                                                     </Button>
-                                                    <span className="w-8 text-center font-medium">{item.quantity}</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingItem({
+                                                                productId: item.productId,
+                                                                name: item.name,
+                                                                quantity: item.quantity,
+                                                                maxStock: item.maxStock || 9999,
+                                                            });
+                                                            setKeypadKey(prev => prev + 1);
+                                                            setIsKeypadOpen(true);
+                                                        }}
+                                                        className="w-12 h-8 text-center font-medium bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                                                    >
+                                                        {item.quantity}
+                                                    </button>
                                                     <Button
                                                         variant="outline"
                                                         size="icon"
@@ -886,6 +974,28 @@ export default function MultiStepCheckoutPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Quantity Edit Keypad */}
+            {editingItem && (
+                <QuantityKeypad
+                    isOpen={isKeypadOpen}
+                    onClose={() => {
+                        setIsKeypadOpen(false);
+                        setEditingItem(null);
+                    }}
+                    onConfirm={(quantity) => {
+                        if (editingItem) {
+                            updateQuantity(editingItem.productId, quantity);
+                            toast.success(t('cart.quantityUpdated', { name: editingItem.name, quantity }));
+                        }
+                        setIsKeypadOpen(false);
+                        setEditingItem(null);
+                    }}
+                    productName={editingItem.name}
+                    maxQuantity={editingItem.maxStock}
+                    resetKey={keypadKey}
+                />
+            )}
         </div>
     );
 }

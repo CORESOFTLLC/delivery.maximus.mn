@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Package, Search, Grid, List, Loader2, ShoppingCart, Check, Building2 } from 'lucide-react';
+import { Package, Search, Grid, List, Loader2, ShoppingCart, Check, Building2, Tag } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -81,10 +81,12 @@ function SelectedPartnerBanner() {
 
 // Product Card Component
 function ProductCard({ product, onProductClick }: { product: Product; onProductClick: (product: Product) => void }) {
-  const { isInCart, getItemQuantity } = useCartStore();
+  const items = useCartStore((state) => state.items);
   const { t } = useTranslation();
-  const inCart = isInCart(product.id);
-  const cartQuantity = getItemQuantity(product.id);
+  
+  // Compute inCart and quantity from items array for reactivity
+  const inCart = items.some((item) => item.productId === product.id);
+  const cartQuantity = items.find((item) => item.productId === product.id)?.quantity || 0;
   
   const stockColors = {
     in_stock: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -128,14 +130,14 @@ function ProductCard({ product, onProductClick }: { product: Product; onProductC
         </Badge>
         
         {/* Product Image */}
-        <div className="aspect-square flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-lg sm:rounded-xl overflow-hidden relative">
+        <div className="aspect-square flex items-center justify-center bg-white rounded-lg sm:rounded-xl overflow-hidden relative">
           {(product.main_image_url || product.images?.[0]) ? (
             <Image
               src={product.main_image_url || product.images[0]}
               alt={product.name}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-              className="object-cover group-hover:scale-105 transition-transform duration-300"
+              className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
               unoptimized
             />
           ) : (
@@ -210,10 +212,12 @@ function ProductCard({ product, onProductClick }: { product: Product; onProductC
 
 // List View Card Component
 function ProductListCard({ product, onProductClick }: { product: Product; onProductClick: (product: Product) => void }) {
-  const { isInCart, getItemQuantity } = useCartStore();
+  const items = useCartStore((state) => state.items);
   const { t } = useTranslation();
-  const inCart = isInCart(product.id);
-  const cartQuantity = getItemQuantity(product.id);
+  
+  // Compute inCart and quantity from items array for reactivity
+  const inCart = items.some((item) => item.productId === product.id);
+  const cartQuantity = items.find((item) => item.productId === product.id)?.quantity || 0;
   
   const stockLabels = {
     in_stock: t('products.stockStatus.inStock'),
@@ -248,14 +252,14 @@ function ProductListCard({ product, onProductClick }: { product: Product; onProd
     >
       <div className="flex items-center p-3 sm:p-4 gap-3 sm:gap-4">
         {/* Product Image */}
-        <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 relative bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-lg overflow-hidden">
-          {product.main_image_url ? (
+        <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 relative bg-white rounded-lg overflow-hidden border border-gray-100">
+          {(product.main_image_url || product.images?.[0]) ? (
             <Image
-              src={product.main_image_url}
+              src={product.main_image_url || product.images[0]}
               alt={product.name}
               fill
               sizes="80px"
-              className="object-cover"
+              className="object-contain p-1"
               unoptimized
             />
           ) : (
@@ -354,27 +358,23 @@ export default function ProductsPage() {
     fetchProducts();
   }, [fetchCategories, fetchBrands, fetchProducts]);
 
-  // Handle category toggle in sidebar
+  // Handle category toggle in sidebar - single selection only
   const handleCategoryToggle = (categoryId: string) => {
+    // If already selected, deselect it. Otherwise select only this one.
     const newCategories = filters.categoryIds.includes(categoryId)
-      ? filters.categoryIds.filter(id => id !== categoryId)
-      : [...filters.categoryIds, categoryId];
+      ? []
+      : [categoryId];
     
+    // setCategories will also clear brandIds and fetch products
     setCategories(newCategories);
-    
-    // Load related brands when category changes
-    if (newCategories.length > 0) {
-      fetchBrands(newCategories[0]);
-    } else {
-      fetchBrands();
-    }
   };
 
-  // Handle brand toggle in sidebar
+  // Handle brand toggle - single selection only
   const handleBrandToggle = (brandId: string) => {
+    // If already selected, deselect it. Otherwise select only this one.
     const newBrands = filters.brandIds.includes(brandId)
-      ? filters.brandIds.filter(id => id !== brandId)
-      : [...filters.brandIds, brandId];
+      ? []
+      : [brandId];
     
     setBrands(newBrands);
   };
@@ -393,11 +393,22 @@ export default function ProductsPage() {
     count: cat.productsCount
   }));
 
-  // Convert brands to filter format
-  const filterBrands = brands.map(brand => ({
-    id: brand.id,
-    name: brand.name
-  }));
+  // Convert brands to filter format - filter by selected categories if any
+  const filterBrands = brands
+    .filter(brand => {
+      // If no category selected, show all brands
+      if (filters.categoryIds.length === 0) return true;
+      // If brand has categoryUID, check if it matches any selected category
+      if (brand.categoryUID) {
+        return filters.categoryIds.includes(brand.categoryUID);
+      }
+      // If brand has no categoryUID, show it anyway
+      return true;
+    })
+    .map(brand => ({
+      id: brand.id,
+      name: brand.name
+    }));
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -441,13 +452,9 @@ export default function ProductsPage() {
       {/* Left Sidebar - Categories */}
       <CategorySidebar
         categories={filterCategories}
-        brands={filterBrands}
         categoriesLoading={categoriesLoading}
-        brandsLoading={brandsLoading}
         selectedCategories={filters.categoryIds}
-        selectedBrands={filters.brandIds}
         onCategoryToggle={handleCategoryToggle}
-        onBrandToggle={handleBrandToggle}
         onClearAll={handleClearFilters}
       />
 
@@ -460,9 +467,30 @@ export default function ProductsPage() {
           {/* Header */}
           <div className="flex items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{t('products.title')}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{t('products.title')}</h1>
+                {filters.categoryIds.length > 0 && (
+                  <Badge variant="secondary" className="text-sm px-2.5 py-0.5 bg-primary/10 text-primary">
+                    {categories.find(c => c.id === filters.categoryIds[0])?.name}
+                  </Badge>
+                )}
+              </div>
               <p className="text-sm text-gray-500 mt-0.5">
-                {paginatorInfo ? t('products.totalCount', { count: paginatorInfo.total.toLocaleString() }) : t('products.loading')}
+                {isLoading ? (
+                  t('products.loading')
+                ) : paginatorInfo ? (
+                  <>
+                    <span className="font-semibold text-gray-700">{paginatorInfo.total.toLocaleString()}</span>
+                    {' '}{t('products.productsFound')}
+                    {filters.brandIds.length > 0 && (
+                      <span className="text-primary ml-1">
+                        • {brands.find(b => b.id === filters.brandIds[0])?.name}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  t('products.noProducts')
+                )}
               </p>
             </div>
             <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 bg-gray-100 p-1 rounded-lg">
@@ -499,6 +527,70 @@ export default function ProductsPage() {
               </div>
             </form>
           </div>
+
+          {/* Brands Filter */}
+          {(filterBrands.length > 0 || brandsLoading || filters.brandIds.length > 0) && (
+            <div className="mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-gray-700">{t('products.filterSheet.brand')}</span>
+                {filters.brandIds.length > 0 && (
+                  <Badge variant="secondary" className="text-xs h-5 px-1.5">
+                    {filters.brandIds.length}
+                  </Badge>
+                )}
+                {/* Clear Brands Button */}
+                {filters.brandIds.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBrands([])}
+                    className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    {t('products.filterSheet.clear')}
+                  </Button>
+                )}
+              </div>
+              {brandsLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{t('products.loading')}</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {/* "All" option - selected when no brand is selected */}
+                  <Badge
+                    variant={filters.brandIds.length === 0 ? 'default' : 'outline'}
+                    className={`cursor-pointer transition-all text-xs py-1 px-2.5 ${
+                      filters.brandIds.length === 0
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'hover:bg-muted border-blue-200 text-blue-700'
+                    }`}
+                    onClick={() => setBrands([])}
+                  >
+                    {t('products.filterSheet.all') || 'Бүгд'}
+                  </Badge>
+                  {filterBrands.map(brand => {
+                    const isSelected = filters.brandIds.includes(brand.id);
+                    return (
+                      <Badge
+                        key={brand.id}
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={`cursor-pointer transition-all text-xs py-1 px-2.5 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'hover:bg-muted border-blue-200 text-blue-700'
+                        }`}
+                        onClick={() => handleBrandToggle(brand.id)}
+                      >
+                        {brand.name}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error */}
           {error && (

@@ -248,7 +248,7 @@ export async function getCategories(token: string): Promise<{
 // Get brands from ERP
 export async function getBrands(token: string, categoryId?: string): Promise<{
   success: boolean;
-  data?: Array<{ id: string; uuid: string; name: string }>;
+  data?: Array<{ id: string; uuid: string; name: string; categoryUID?: string }>;
   error?: string;
 }> {
   try {
@@ -272,7 +272,7 @@ export async function getBrands(token: string, categoryId?: string): Promise<{
     }
 
     // Brands API returns array directly
-    const data: Array<{ uuid: string; name: string }> = await response.json();
+    const data: Array<{ uuid: string; name: string; categoryUID?: string }> = await response.json();
 
     return {
       success: true,
@@ -280,6 +280,7 @@ export async function getBrands(token: string, categoryId?: string): Promise<{
         id: brand.uuid,
         uuid: brand.uuid,
         name: brand.name,
+        categoryUID: brand.categoryUID,
       })),
     };
   } catch (error) {

@@ -11,6 +11,7 @@ export interface Brand {
   id: string;
   uuid: string;
   name: string;
+  categoryUID?: string;
 }
 
 const IMAGE_BASE_URL = 'https://cloud.maximus.mn';
@@ -257,6 +258,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
           id: b.id,
           uuid: b.uuid,
           name: b.name,
+          categoryUID: b.categoryUID,
         }));
         set({ brands, brandsLoading: false });
       } else {
@@ -302,10 +304,11 @@ export const useProductStore = create<ProductState>((set, get) => ({
   // Set multiple categories filter
   setCategories: (categoryIds: string[]) => {
     // Clear products immediately to show loading skeleton
+    // Also clear brandIds when category changes
     set((state) => ({
       products: [],
       isLoading: true,
-      filters: { ...state.filters, categoryIds, categoryId: categoryIds[0] || null },
+      filters: { ...state.filters, categoryIds, categoryId: categoryIds[0] || null, brandIds: [] },
     }));
     // Fetch brands for the first selected category
     if (categoryIds.length > 0) {

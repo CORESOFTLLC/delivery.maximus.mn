@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, FolderTree, X, Tag } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, FolderTree, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,38 +14,25 @@ export type CategoryItem = {
   count?: number
 }
 
-export type BrandItem = {
-  id: string
-  name: string
-}
-
 type Props = {
   categories: CategoryItem[]
-  brands: BrandItem[]
   categoriesLoading?: boolean
-  brandsLoading?: boolean
   selectedCategories: string[]
-  selectedBrands: string[]
   onCategoryToggle: (categoryId: string) => void
-  onBrandToggle: (brandId: string) => void
   onClearAll: () => void
 }
 
 export function CategorySidebar({
   categories,
-  brands,
   categoriesLoading = false,
-  brandsLoading = false,
   selectedCategories,
-  selectedBrands,
   onCategoryToggle,
-  onBrandToggle,
   onClearAll,
 }: Props) {
   const { t } = useTranslation()
   const [isCollapsed, setIsCollapsed] = useState(false)
   
-  const activeFiltersCount = selectedCategories.length + selectedBrands.length
+  const activeFiltersCount = selectedCategories.length
 
   if (isCollapsed) {
     return (
@@ -76,7 +63,7 @@ export function CategorySidebar({
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <FolderTree className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-sm">{t('products.filterSheet.title')}</h3>
+          <h3 className="font-semibold text-sm">{t('products.filterSheet.category')}</h3>
           {activeFiltersCount > 0 && (
             <Badge className="h-5 px-1.5 text-xs">
               {activeFiltersCount}
@@ -109,111 +96,49 @@ export function CategorySidebar({
       )}
 
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {/* Categories Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <FolderTree className="h-4 w-4 text-muted-foreground" />
-              <h4 className="font-medium text-sm text-gray-700">
-                {t('products.filterSheet.category')}
-              </h4>
-              {selectedCategories.length > 0 && (
-                <Badge variant="secondary" className="text-xs h-5 px-1.5">
-                  {selectedCategories.length}
-                </Badge>
-              )}
+        <div className="p-4">
+          {/* Categories List */}
+          {categoriesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-
-            {categoriesLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : categories.length > 0 ? (
-              <div className="space-y-1">
-                {categories.map(category => {
-                  const isSelected = selectedCategories.includes(category.id)
-                  return (
-                    <button
-                      key={category.id}
-                      onClick={() => onCategoryToggle(category.id)}
-                      className={cn(
-                        'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all',
-                        isSelected
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-gray-100 text-gray-700'
-                      )}
-                    >
-                      <span className="truncate">{category.name}</span>
-                      {category.count !== undefined && category.count > 0 && (
-                        <span className={cn(
-                          'text-xs ml-2 shrink-0',
-                          isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                        )}>
-                          {category.count}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground px-3 py-2">
-                {t('products.filterSheet.noCategory')}
-              </p>
-            )}
-          </div>
-
-          {/* Brands Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Tag className="h-4 w-4 text-muted-foreground" />
-              <h4 className="font-medium text-sm text-gray-700">
-                {t('products.filterSheet.brand')}
-              </h4>
-              {selectedBrands.length > 0 && (
-                <Badge variant="secondary" className="text-xs h-5 px-1.5">
-                  {selectedBrands.length}
-                </Badge>
-              )}
+          ) : categories.length > 0 ? (
+            <div className="space-y-1">
+              {categories.map(category => {
+                const isSelected = selectedCategories.includes(category.id)
+                return (
+                  <button
+                    key={category.id}
+                    onClick={() => onCategoryToggle(category.id)}
+                    className={cn(
+                      'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all',
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    )}
+                  >
+                    <span className="truncate">{category.name}</span>
+                    {category.count !== undefined && category.count > 0 && (
+                      <span className={cn(
+                        'text-xs ml-2 shrink-0',
+                        isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                      )}>
+                        {category.count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
-
-            {brandsLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : brands.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {brands.map(brand => {
-                  const isSelected = selectedBrands.includes(brand.id)
-                  return (
-                    <Badge
-                      key={brand.id}
-                      variant={isSelected ? 'default' : 'outline'}
-                      className={cn(
-                        'cursor-pointer transition-all text-xs py-1 px-2',
-                        isSelected
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'hover:bg-muted border-blue-200 text-blue-700'
-                      )}
-                      onClick={() => onBrandToggle(brand.id)}
-                    >
-                      {brand.name}
-                    </Badge>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground px-3 py-2">
-                {selectedCategories.length > 0
-                  ? t('products.filterSheet.noBrandForCategory')
-                  : t('products.filterSheet.noBrand')}
-              </p>
-            )}
-          </div>
+          ) : (
+            <p className="text-sm text-muted-foreground px-3 py-2">
+              {t('products.filterSheet.noCategory')}
+            </p>
+          )}
         </div>
       </ScrollArea>
 
-      {/* Selected Filters Summary */}
+      {/* Selected Categories Summary */}
       {activeFiltersCount > 0 && (
         <div className="border-t border-gray-100 p-4">
           <p className="text-xs text-muted-foreground mb-2">
@@ -230,19 +155,6 @@ export function CategorySidebar({
                   onClick={() => onCategoryToggle(catId)}
                 >
                   {cat.name}
-                  <X className="h-3 w-3" />
-                </Badge>
-              ) : null
-            })}
-            {selectedBrands.map(brandId => {
-              const brand = brands.find(b => b.id === brandId)
-              return brand ? (
-                <Badge
-                  key={brandId}
-                  className="gap-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-pointer"
-                  onClick={() => onBrandToggle(brandId)}
-                >
-                  {brand.name}
                   <X className="h-3 w-3" />
                 </Badge>
               ) : null

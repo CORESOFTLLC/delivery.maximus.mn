@@ -60,7 +60,7 @@ function TopNavBar() {
   const pathname = usePathname();
   const { logout, user } = useAuth();
   const { t } = useTranslation();
-  const { totalItems, selectedPartner, hasPartner, clearSelectedPartner, setSelectedPartner } = useCartStore();
+  const { totalItems, itemCount, selectedPartner, hasPartner, clearSelectedPartner, setSelectedPartner } = useCartStore();
   const { partners, fetchPartners, isLoading: partnersLoading } = usePartnerStore();
   const { warehouses, selectedWarehouse, selectWarehouseById } = useWarehouseStore();
   const isHydrated = useHydrated();
@@ -135,7 +135,7 @@ function TopNavBar() {
               width={160}
               height={48}
               priority
-              className="h-12 w-auto"
+              style={{ width: 'auto', height: '48px' }}
             />
           </Link>
 
@@ -215,17 +215,17 @@ function TopNavBar() {
             {/* Cart Button */}
             <Link href="/cart">
               <Button 
-                variant={totalItems > 0 ? "default" : "outline"} 
+                variant={itemCount > 0 ? "default" : "outline"} 
                 className={cn(
                   "gap-2 h-9",
-                  totalItems > 0 && "bg-primary hover:bg-primary/90"
+                  itemCount > 0 && "bg-primary hover:bg-primary/90"
                 )}
               >
                 <ShoppingCart className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('nav.cart')}</span>
-                {isHydrated && totalItems > 0 && (
-                  <Badge variant="secondary" className="ml-1 bg-white/20 text-white">
-                    {totalItems}
+                {isHydrated && itemCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 px-2 py-0.5 text-lg font-bold bg-white/20">
+                    {itemCount}
                   </Badge>
                 )}
               </Button>
