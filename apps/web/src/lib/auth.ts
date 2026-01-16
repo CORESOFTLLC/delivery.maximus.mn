@@ -1,8 +1,8 @@
 // Auth API configuration
-const API_BASE_URL = 'https://cloud.maximus.mn/api/client';
+const API_BASE_URL = 'https://cloud.maximus.mn/api/salesapp';
 
 export interface LoginCredentials {
-  corporate_id: string;
+  username: string;
   password: string;
 }
 
@@ -22,17 +22,27 @@ export interface ErpDetails {
   routeRange: string;
   routeBussinesRegion: string | null;
   warehouses: Warehouse[];
-  imeiCode?: string[];
+  imeiCode?: Array<{ routeIMEI: string }>;
 }
 
-// Client (Company/Partner) - шинэ бүтэц
+// SalesApp User - шинэ бүтэц
+export interface SalesAppUser {
+  id: number;
+  name: string;
+  username: string;
+  account_type: 'company' | 'individual';
+  sub_type: 'employee' | 'partner' | 'customer';
+  is_active: boolean;
+}
+
+// Legacy AuthClient interface - backward compatibility
 export interface AuthClient {
   id: number;
   name: string;
-  corporate_id: string;
-  company_code: string;
+  corporate_id?: string;
+  company_code?: string;
   account_type: 'company' | 'individual';
-  sub_type: 'partner' | 'customer' | 'supplier';
+  sub_type: 'partner' | 'customer' | 'supplier' | 'employee';
   is_active: boolean;
 }
 
@@ -41,6 +51,7 @@ export interface AuthUser {
   id: number;
   name: string;
   email?: string;
+  username?: string;
   corporate_id?: string;
   company_code?: string;
   is_active: boolean;
@@ -50,7 +61,8 @@ export interface AuthResponse {
   access_token: string;
   token_type: string;
   expires_in?: number;
-  client?: AuthClient;
+  salesapp?: SalesAppUser;
+  client?: AuthClient; // backward compatibility
   erp_details?: ErpDetails[];
 }
 
@@ -71,28 +83,37 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
 
   if (!response.ok) {
     const error: AuthError = await response.json().catch(() => ({
-      message: 'Login failed. Please try again.',
+      message: 'Нэвтрэхэд алдаа гарлаа. Дахин оролдоно уу.',
     }));
     throw new Error(error.message || 'Authentication failed');
   }
 
   const data: AuthResponse = await response.json();
 
-  // Store token, client and ERP details in localStorage
+  // Store token, salesapp user and ERP details in localStorage
   if (typeof window !== 'undefined' && data.access_token) {
     localStorage.setItem('auth_token', data.access_token);
 
-    // Store client info (convert to user format for backward compatibility)
-    if (data.client) {
+    // Store salesapp user info (convert to user format for backward compatibility)
+    if (data.salesapp) {
       const userCompat: AuthUser = {
-        id: data.client.id,
-        name: data.client.name,
-        corporate_id: data.client.corporate_id,
-        company_code: data.client.company_code,
-        is_active: data.client.is_active,
+        id: data.salesapp.id,
+        name: data.salesapp.name,
+        username: data.salesapp.username,
+        is_active: data.salesapp.is_active,
       };
       localStorage.setItem('auth_user', JSON.stringify(userCompat));
-      localStorage.setItem('auth_client', JSON.stringify(data.client));
+      localStorage.setItem('auth_salesapp', JSON.stringify(data.salesapp));
+      
+      // Also store as client for backward compatibility
+      const clientCompat: AuthClient = {
+        id: data.salesapp.id,
+        name: data.salesapp.name,
+        account_type: data.salesapp.account_type,
+        sub_type: data.salesapp.sub_type,
+        is_active: data.salesapp.is_active,
+      };
+      localStorage.setItem('auth_client', JSON.stringify(clientCompat));
     }
 
     // Store ERP details array - use first item for backward compatibility

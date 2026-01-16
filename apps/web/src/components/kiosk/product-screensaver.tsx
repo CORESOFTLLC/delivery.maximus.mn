@@ -104,7 +104,7 @@ export function ProductScreensaver({ products, onInteraction }: ProductScreensav
               <line x1="16" y1="18" x2="16" y2="22" />
               <line x1="6" y1="22" x2="18" y2="22" />
             </svg>
-            MAXIMUS KIOSK
+            MAXIMUS sales
           </h1>
           <p className="text-gray-500 text-lg">
             {t('screensaver.touchToOrder')}

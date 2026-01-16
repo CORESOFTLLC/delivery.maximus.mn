@@ -1,59 +1,19 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { 
   TrendingUp, 
-  TrendingDown, 
   ShoppingCart, 
   Users, 
   Package,
   ArrowRight,
+  Wallet,
+  CalendarDays,
+  Boxes,
 } from 'lucide-react-native';
 import { useAuthStore } from '../../stores/auth-store';
 import { Box, VStack, HStack, Text, Heading, Card, Pressable } from '../../components/ui';
-
-// Dashboard Statistics Card
-function StatCard({ 
-  title, 
-  value, 
-  change, 
-  changePercent, 
-  icon: Icon, 
-  color 
-}: { 
-  title: string;
-  value: string;
-  change: number;
-  changePercent: number;
-  icon: any;
-  color: string;
-}) {
-  const isPositive = change >= 0;
-  
-  return (
-    <View style={styles.statCard}>
-      <HStack className="justify-between items-start mb-3">
-        <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-          <Icon size={22} color={color} />
-        </View>
-        <HStack space="xs" className="items-center">
-          {isPositive ? (
-            <TrendingUp size={16} color="#10B981" />
-          ) : (
-            <TrendingDown size={16} color="#EF4444" />
-          )}
-          <Text 
-            size="sm" 
-            className={isPositive ? 'text-success-600' : 'text-error-600'}
-          >
-            {isPositive ? '+' : ''}{changePercent.toFixed(1)}%
-          </Text>
-        </HStack>
-      </HStack>
-      <Text size="sm" className="text-typography-500 mb-1">{title}</Text>
-      <Heading size="xl" className="text-typography-900">{value}</Heading>
-    </View>
-  );
-}
+import { getOrders, type Order } from '../../services/api';
 
 // Quick Action Button
 function QuickAction({ icon: Icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
@@ -67,49 +27,133 @@ function QuickAction({ icon: Icon, label, onPress }: { icon: any; label: string;
   );
 }
 
+// Today Stats Card - Compact design
+function TodayStatCard({ 
+  title, 
+  value, 
+  icon: Icon, 
+  color,
+  subtitle,
+}: { 
+  title: string;
+  value: string;
+  icon: any;
+  color: string;
+  subtitle?: string;
+}) {
+  return (
+    <View style={styles.todayStatCard}>
+      <View style={[styles.todayIconContainer, { backgroundColor: color + '15' }]}>
+        <Icon size={20} color={color} />
+      </View>
+      <VStack style={{ flex: 1, marginLeft: 12 }}>
+        <Text size="xs" style={{ fontFamily: 'GIP-Regular', color: '#6B7280' }}>{title}</Text>
+        <Text size="lg" style={{ fontFamily: 'GIP-Bold', color: '#111827' }}>{value}</Text>
+        {subtitle && (
+          <Text size="xs" style={{ fontFamily: 'GIP-Regular', color: '#9CA3AF' }}>{subtitle}</Text>
+        )}
+      </VStack>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
-  const { user } = useAuthStore();
-  const [refreshing, setRefreshing] = React.useState(false);
+  const router = useRouter();
+  const { user, erpDetails } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Today's order statistics
+  const [todayStats, setTodayStats] = useState({
+    totalOrders: 0,
+    uniquePartners: 0,
+    totalAmount: 0,
+    totalProductTypes: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
 
-  const onRefresh = React.useCallback(() => {
+  const fetchTodayOrders = useCallback(async () => {
+    const username = erpDetails?.[0]?.username;
+    if (!username) {
+      setIsLoading(false);
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      // Fetch all active orders for today
+      const result = await getOrders({
+        page: 1,
+        pageSize: 100, // Get all today's orders
+        username,
+        startDate: today,
+        endDate: today,
+        tabName: 'active',
+      });
+
+      if (result.success && result.data) {
+        const orders = result.data;
+        
+        // Calculate statistics
+        const uniquePartnerIds = new Set(orders.map(o => o.companyId));
+        const totalAmount = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+        
+        // Count unique product types across all orders
+        const uniqueProductIds = new Set<string>();
+        orders.forEach(order => {
+          order.products?.forEach(product => {
+            uniqueProductIds.add(product.uuid);
+          });
+        });
+
+        setTodayStats({
+          totalOrders: orders.length,
+          uniquePartners: uniquePartnerIds.size,
+          totalAmount,
+          totalProductTypes: uniqueProductIds.size,
+        });
+
+        // Set recent orders (latest 5)
+        setRecentOrders(orders.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Failed to fetch today orders:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [erpDetails]);
+
+  useEffect(() => {
+    fetchTodayOrders();
+  }, [fetchTodayOrders]);
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
-  }, []);
+    await fetchTodayOrders();
+    setRefreshing(false);
+  }, [fetchTodayOrders]);
 
-  const stats = [
-    { 
-      title: 'Энэ сарын борлуулалт', 
-      value: '₮45.5M', 
-      change: 2500000, 
-      changePercent: 5.8, 
-      icon: TrendingUp,
-      color: '#2563EB'
-    },
-    { 
-      title: 'Идэвхтэй захиалга', 
-      value: '156', 
-      change: 12, 
-      changePercent: 8.3, 
-      icon: ShoppingCart,
-      color: '#10B981'
-    },
-    { 
-      title: 'Нийт харилцагч', 
-      value: '1,243', 
-      change: 45, 
-      changePercent: 3.8, 
-      icon: Users,
-      color: '#8B5CF6'
-    },
-    { 
-      title: 'Бараа төрөл', 
-      value: '892', 
-      change: -12, 
-      changePercent: -1.3, 
-      icon: Package,
-      color: '#F59E0B'
-    },
-  ];
+  const formatAmount = (amount: number) => {
+    if (amount >= 1000000) {
+      return `₮${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `₮${(amount / 1000).toFixed(0)}K`;
+    }
+    return `₮${amount.toLocaleString()}`;
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    
+    if (diffMins < 60) return `${diffMins} минутын өмнө`;
+    if (diffHours < 24) return `${diffHours} цагийн өмнө`;
+    return dateString;
+  };
 
   return (
     <ScrollView 
@@ -118,21 +162,71 @@ export default function HomeScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Welcome Section */}
+      {/* Welcome Section with Products Button */}
       <Box className="px-4 pt-4 pb-6 bg-primary-600">
-        <VStack space="xs">
-          <Text size="md" className="text-white opacity-80">Тавтай морил 👋</Text>
-          <Heading size="xl" className="text-white">{user?.name || 'Хэрэглэгч'}</Heading>
-        </VStack>
+        <HStack style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <VStack space="xs" style={{ flex: 1 }}>
+            <Text size="md" className="text-white opacity-80">Тавтай морил 👋</Text>
+            <Heading size="xl" className="text-white">{user?.name || 'Хэрэглэгч'}</Heading>
+          </VStack>
+          
+          {/* Products Button */}
+          <TouchableOpacity 
+            style={styles.productsButton}
+            onPress={() => router.push('/products')}
+            activeOpacity={0.8}
+          >
+            <Boxes size={20} color="#2563EB" />
+            <Text style={styles.productsButtonText}>Бараа</Text>
+          </TouchableOpacity>
+        </HStack>
       </Box>
 
-      {/* Stats Grid */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statsGrid}>
-          {stats.map((stat, index) => (
-            <StatCard key={index} {...stat} />
-          ))}
-        </View>
+      {/* Today's Stats Section */}
+      <View style={styles.todayStatsContainer}>
+        <HStack style={{ alignItems: 'center', marginBottom: 16, gap: 8 }}>
+          <CalendarDays size={20} color="#F59E0B" />
+          <Text size="md" style={{ fontFamily: 'GIP-SemiBold', color: '#111827' }}>
+            Өнөөдрийн борлуулалт
+          </Text>
+        </HStack>
+        
+        {isLoading ? (
+          <View style={{ alignItems: 'center', padding: 20 }}>
+            <ActivityIndicator color="#2563EB" />
+          </View>
+        ) : (
+          <View style={styles.todayStatsGrid}>
+            <TodayStatCard
+              title="Захиалга"
+              value={todayStats.totalOrders.toString()}
+              icon={ShoppingCart}
+              color="#2563EB"
+              subtitle="Нийт захиалга"
+            />
+            <TodayStatCard
+              title="Харилцагч"
+              value={todayStats.uniquePartners.toString()}
+              icon={Users}
+              color="#8B5CF6"
+              subtitle="Давхцаагүй"
+            />
+            <TodayStatCard
+              title="Нийт дүн"
+              value={formatAmount(todayStats.totalAmount)}
+              icon={Wallet}
+              color="#10B981"
+              subtitle="Борлуулалт"
+            />
+            <TodayStatCard
+              title="Бараа төрөл"
+              value={todayStats.totalProductTypes.toString()}
+              icon={Package}
+              color="#F59E0B"
+              subtitle="Давхцаагүй"
+            />
+          </View>
+        )}
       </View>
 
       {/* Quick Actions */}
@@ -154,26 +248,54 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      {/* Recent Activity */}
+      {/* Recent Orders */}
       <View style={styles.section}>
-        <Heading size="md" className="text-typography-900 mb-4 px-4">Сүүлийн үйл ажиллагаа</Heading>
+        <Heading size="md" className="text-typography-900 mb-4 px-4">Сүүлийн захиалгууд</Heading>
         <VStack space="sm" className="px-4">
-          {[1, 2, 3].map((_, index) => (
-            <View key={index} style={styles.activityItem}>
-              <View style={styles.activityDot} />
-              <VStack className="flex-1 ml-3">
-                <Text size="sm" className="text-typography-800 font-medium">
-                  Захиалга #{1000 + index} баталгаажсан
-                </Text>
-                <Text size="xs" className="text-typography-500">
-                  2 цагийн өмнө
-                </Text>
-              </VStack>
-              <Text size="sm" className="text-success-600 font-medium">
-                ₮{(125000 + index * 50000).toLocaleString()}
+          {isLoading ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <ActivityIndicator color="#2563EB" />
+            </View>
+          ) : recentOrders.length === 0 ? (
+            <View style={styles.emptyState}>
+              <ShoppingCart size={32} color="#9CA3AF" />
+              <Text size="sm" style={{ fontFamily: 'GIP-Regular', color: '#6B7280', marginTop: 8 }}>
+                Өнөөдөр захиалга байхгүй
               </Text>
             </View>
-          ))}
+          ) : (
+            recentOrders.map((order, index) => (
+              <View key={order.uuid || index} style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: order.status === 'Pending' ? '#F59E0B' : '#10B981' }]} />
+                <VStack className="flex-1 ml-3">
+                  <HStack style={{ alignItems: 'center', gap: 8 }}>
+                    <Text size="sm" style={{ fontFamily: 'GIP-SemiBold', color: '#111827' }}>
+                      {order.orderCode}
+                    </Text>
+                    <View style={{ 
+                      backgroundColor: order.status === 'Pending' ? '#FEF3C7' : '#D1FAE5', 
+                      paddingHorizontal: 6, 
+                      paddingVertical: 2, 
+                      borderRadius: 4 
+                    }}>
+                      <Text size="xs" style={{ 
+                        fontFamily: 'GIP-Medium', 
+                        color: order.status === 'Pending' ? '#92400E' : '#065F46' 
+                      }}>
+                        {order.status === 'Pending' ? 'Хүлээгдэж буй' : order.status}
+                      </Text>
+                    </View>
+                  </HStack>
+                  <Text size="xs" style={{ fontFamily: 'GIP-Regular', color: '#6B7280' }} numberOfLines={1}>
+                    {order.companyName}
+                  </Text>
+                </VStack>
+                <Text size="sm" style={{ fontFamily: 'GIP-SemiBold', color: '#10B981' }}>
+                  ₮{order.totalAmount?.toLocaleString()}
+                </Text>
+              </View>
+            ))
+          )}
         </VStack>
       </View>
 
@@ -187,31 +309,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
-  statsContainer: {
+  todayStatsContainer: {
     marginTop: -20,
-    paddingHorizontal: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    width: '48%',
+    marginHorizontal: 16,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
+  todayStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  todayStatCard: {
+    width: '47%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
+    padding: 12,
+  },
+  todayIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -246,5 +368,26 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: '#10B981',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 32,
+  },
+  productsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  productsButtonText: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#2563EB',
   },
 });

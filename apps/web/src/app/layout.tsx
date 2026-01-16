@@ -26,7 +26,7 @@ const gip = localFont({
 
 export const metadata: Metadata = {
   title: "Sales Maximus - Борлуулалтын систем",
-  description: "MAXIMUS ERP Борлуулалтын удирдлагын систем",
+  description: "MAXIMUS SALES Борлуулалтын удирдлагын систем",
   icons: {
     icon: '/logos/favicon.ico',
   },

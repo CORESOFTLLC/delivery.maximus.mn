@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 const LoginForm = () => {
   const [isVisible, setIsVisible] = useState(false)
-  const [corporateId, setCorporateId] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const { login, isLoading, error, setError } = useAuth()
 
@@ -20,12 +20,12 @@ const LoginForm = () => {
     e.preventDefault()
     setError(null)
 
-    if (!corporateId || !password) {
-      setError('Байгууллагын ID болон нууц үг оруулна уу')
+    if (!username || !password) {
+      setError('Хэрэглэгчийн нэр болон нууц үг оруулна уу')
       return
     }
 
-    await login({ corporate_id: corporateId, password })
+    await login({ username, password })
   }
 
   return (
@@ -36,17 +36,17 @@ const LoginForm = () => {
         </div>
       )}
 
-      {/* Corporate ID */}
+      {/* Username */}
       <div className='space-y-1'>
-        <Label className='leading-5' htmlFor='corporateId'>
-          Байгууллагын ID*
+        <Label className='leading-5' htmlFor='username'>
+          Хэрэглэгчийн нэр*
         </Label>
         <Input
           type='text'
-          id='corporateId'
-          placeholder='Байгууллагын ID оруулна уу'
-          value={corporateId}
-          onChange={(e) => setCorporateId(e.target.value)}
+          id='username'
+          placeholder='Хэрэглэгчийн нэр оруулна уу'
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           disabled={isLoading}
           required
         />

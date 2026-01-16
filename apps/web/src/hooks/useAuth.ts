@@ -42,16 +42,22 @@ export function useAuth() {
       const response = await apiLogin(credentials);
       setIsAuthenticated(true);
 
-      // Set client info
-      if (response.client) {
-        setClient(response.client);
-        // Also set user for backward compatibility
+      // Set salesapp user info
+      if (response.salesapp) {
         setUser({
-          id: response.client.id,
-          name: response.client.name,
-          corporate_id: response.client.corporate_id,
-          company_code: response.client.company_code,
-          is_active: response.client.is_active,
+          id: response.salesapp.id,
+          name: response.salesapp.name,
+          username: response.salesapp.username,
+          is_active: response.salesapp.is_active,
+        });
+        
+        // Also set client for backward compatibility
+        setClient({
+          id: response.salesapp.id,
+          name: response.salesapp.name,
+          account_type: response.salesapp.account_type,
+          sub_type: response.salesapp.sub_type,
+          is_active: response.salesapp.is_active,
         });
       }
 
@@ -60,10 +66,10 @@ export function useAuth() {
         setErpDetails(response.erp_details[0]);
       }
 
-      router.push('/dashboard');
+      router.push('/products');
       return response;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed';
+      const message = err instanceof Error ? err.message : 'Нэвтрэхэд алдаа гарлаа';
       setError(message);
       return null;
     } finally {

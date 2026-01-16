@@ -1,27 +1,34 @@
 import React from 'react';
-import { View, ViewProps } from 'react-native';
+import { View, ViewProps, ViewStyle } from 'react-native';
 
 interface HStackProps extends ViewProps {
   className?: string;
   space?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
-const spaceMap = {
-  xs: 'gap-1',
-  sm: 'gap-2',
-  md: 'gap-3',
-  lg: 'gap-4',
-  xl: 'gap-6',
-  '2xl': 'gap-8',
+const spaceStyleMap: Record<string, ViewStyle> = {
+  xs: { gap: 4 },
+  sm: { gap: 8 },
+  md: { gap: 12 },
+  lg: { gap: 16 },
+  xl: { gap: 24 },
+  '2xl': { gap: 32 },
 };
 
 export const HStack: React.FC<HStackProps> = ({ 
   className = '', 
   space,
+  style,
   ...props 
 }) => {
-  const spaceClass = space ? spaceMap[space] : '';
-  return <View className={`flex-row ${spaceClass} ${className}`} {...props} />;
+  const spaceStyle = space ? spaceStyleMap[space] : {};
+  return (
+    <View 
+      className={`flex-row ${className}`} 
+      style={[spaceStyle, style]}
+      {...props} 
+    />
+  );
 };
 
 export default HStack;

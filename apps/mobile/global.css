@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* GIP Font - Default for all text */
+@layer base {
+  * {
+    font-family: 'GIP-Regular';
+  }
+}
+
 /* Works on Chrome, Edge, and Safari */
 *::-webkit-scrollbar {
     width: 6px;

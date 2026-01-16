@@ -9,6 +9,8 @@ export { Card } from './card';
 export { Icon } from './icon';
 export { Avatar, AvatarFallbackText, AvatarImage } from './avatar';
 export { Progress, ProgressFilledTrack } from './progress';
+export { Badge, BadgeText, BadgeIcon } from './badge';
+export { Divider } from './divider';
 export { 
   FormControl, 
   FormControlLabel, 

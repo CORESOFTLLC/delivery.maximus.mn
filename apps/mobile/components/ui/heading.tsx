@@ -18,10 +18,17 @@ const sizeMap = {
 export const Heading: React.FC<HeadingProps> = ({ 
   className = '', 
   size = 'lg',
+  style,
   ...props 
 }) => {
   const sizeClass = sizeMap[size];
-  return <Text className={`${sizeClass} font-bold text-typography-900 ${className}`} {...props} />;
+  return (
+    <Text 
+      className={`${sizeClass} font-bold text-typography-900 ${className}`}
+      style={[{ fontFamily: 'GIP-Bold' }, style]} 
+      {...props} 
+    />
+  );
 };
 
 export default Heading;

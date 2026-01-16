@@ -2,7 +2,7 @@
   "expo": {
     "name": "MAXIMUS Sales",
     "slug": "maximus-sales",
-    "version": "1.0.0",
+    "version": "2.0.1",
     "scheme": "maximus-sales",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

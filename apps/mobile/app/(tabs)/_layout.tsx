@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Home, Briefcase, Clock, Menu, X, Wallet, CalendarClock } from 'lucide-react-native';
+import { Home, Percent, ShoppingCart, ClipboardList, Users, Menu, X, Wallet, CalendarClock } from 'lucide-react-native';
 import { Text, VStack, HStack, Heading, Pressable, Box } from '../../components/ui';
 import { useAuthStore } from '../../stores/auth-store';
 
@@ -107,19 +107,51 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="promo"
+          options={{
+            title: 'Промо',
+            headerTitle: 'Промо урамшуулал',
+            tabBarIcon: ({ color, size }) => <Percent size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="cart"
+          options={{
+            title: 'Сагс',
+            headerTitle: 'Сагс',
+            tabBarIcon: ({ color, size }) => <ShoppingCart size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="orders"
+          options={{
+            title: 'Захиалга',
+            headerTitle: 'Захиалгууд',
+            tabBarIcon: ({ color, size }) => <ClipboardList size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="partners"
+          options={{
+            title: 'Харилцагч',
+            headerShown: false,
+            tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
           name="work"
           options={{
+            href: null,
             title: 'Ажил',
             headerTitle: 'Ажлын жагсаалт',
-            tabBarIcon: ({ color, size }) => <Briefcase size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="attendance"
           options={{
+            href: null,
             title: 'Ирц',
             headerTitle: 'Цаг бүртгэл',
-            tabBarIcon: ({ color, size }) => <Clock size={size} color={color} />,
           }}
         />
       </Tabs>

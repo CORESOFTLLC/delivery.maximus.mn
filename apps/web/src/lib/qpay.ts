@@ -2,7 +2,7 @@
  * QPay Payment Service
  * 
  * QPay v2 API integration for B2B Sales platform
- * Based on kiosk project implementation
+ * Based on sales project implementation
  * 
  * Docs: https://developer.qpay.mn/
  */

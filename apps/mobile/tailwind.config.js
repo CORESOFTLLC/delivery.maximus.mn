@@ -15,6 +15,18 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'gip': ['GIP-Regular'],
+        'gip-thin': ['GIP-Thin'],
+        'gip-ultralight': ['GIP-UltraLight'],
+        'gip-light': ['GIP-Light'],
+        'gip-medium': ['GIP-Medium'],
+        'gip-semibold': ['GIP-SemiBold'],
+        'gip-bold': ['GIP-Bold'],
+        'gip-extrabold': ['GIP-ExtraBold'],
+        'gip-heavy': ['GIP-Heavy'],
+        'gip-black': ['GIP-Black'],
+      },
       colors: {
         primary: {
           0: 'rgb(var(--color-primary-0)/<alpha-value>)',

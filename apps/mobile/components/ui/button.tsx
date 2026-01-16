@@ -87,7 +87,14 @@ export const ButtonText: React.FC<ButtonTextProps> = ({
   children 
 }) => {
   const sizeClass = textSizeMap[size];
-  return <Text className={`${sizeClass} font-semibold text-white ${className}`}>{children}</Text>;
+  return (
+    <Text 
+      className={`${sizeClass} font-semibold text-white ${className}`}
+      style={{ fontFamily: 'GIP-SemiBold' }}
+    >
+      {children}
+    </Text>
+  );
 };
 
 interface ButtonSpinnerProps {

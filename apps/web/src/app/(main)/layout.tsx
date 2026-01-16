@@ -14,13 +14,16 @@ import {
   Warehouse,
   ChevronDown,
   Check,
-  FileText
+  FileText,
+  User,
+  LogOut,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import AuthGuard from '@/components/auth/AuthGuard';
-import { KioskWrapper } from '@/components/kiosk/kiosk-wrapper';
+import { salesWrapper } from '@/components/sales/sales-wrapper';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useCartStore } from '@/stores/cart-store';
@@ -55,7 +58,7 @@ function useHydrated() {
   );
 }
 
-// Kiosk Top Navigation Bar
+// sales Top Navigation Bar
 function TopNavBar() {
   const pathname = usePathname();
   const { logout, user } = useAuth();
@@ -68,7 +71,7 @@ function TopNavBar() {
   const [pendingWarehouseId, setPendingWarehouseId] = useState<string | null>(null);
   const [showPartnerClearDialog, setShowPartnerClearDialog] = useState(false);
 
-  // Auto-select first partner if no partner selected (Kiosk mode)
+  // Auto-select first partner if no partner selected (sales mode)
   useEffect(() => {
     // Fetch partners on mount if not loaded
     if (partners.length === 0 && !partnersLoading) {
@@ -84,10 +87,10 @@ function TopNavBar() {
     }
   }, [partners, hasPartner, selectedPartner, setSelectedPartner]);
 
-  // Kiosk navigation - with translations
-  const kioskNavigation = [
+  // sales navigation - with translations
+  const salesNavigation = [
     { name: t('nav.products'), href: '/products', icon: Package },
-    // { name: t('nav.partners'), href: '/partners', icon: Users }, // Түр хасав
+    { name: t('nav.partners'), href: '/partners', icon: Users },
     { name: t('nav.orders'), href: '/orders', icon: FileText },
   ];
 
@@ -141,7 +144,7 @@ function TopNavBar() {
 
           {/* Center Navigation */}
           <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-            {kioskNavigation.map((item) => {
+            {salesNavigation.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/' && pathname.startsWith(item.href));
               
@@ -233,6 +236,56 @@ function TopNavBar() {
 
             {/* Language Switcher */}
             <LanguageSwitcher variant="compact" />
+
+            {/* User Profile Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2 h-9 px-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  {isHydrated && user && (
+                    <span className="hidden md:inline text-sm font-medium max-w-[120px] truncate">
+                      {user.name}
+                    </span>
+                  )}
+                  <ChevronDown className="h-3 w-3 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                {isHydrated && user && (
+                  <>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">{user.name}</p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.username || user.corporate_id}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <Link href="/profile">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Профайл</span>
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuItem className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Тохиргоо</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                  onClick={logout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Гарах</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -289,7 +342,7 @@ export default function MainLayout({
 }) {
   return (
     <AuthGuard>
-      <KioskWrapper idleTimeout={120000}>
+      <salesWrapper idleTimeout={120000}>
         <div className="min-h-screen bg-gray-50/50">
           {/* Top Navigation Bar */}
           <TopNavBar />
@@ -302,11 +355,11 @@ export default function MainLayout({
           {/* Footer with Version */}
           <footer className="fixed bottom-0 left-0 right-0 py-1 bg-gray-50/80 backdrop-blur-sm border-t border-gray-100">
             <div className="text-center text-xs text-gray-400">
-              MAXIMUS KIOSK v1.0.1
+              MAXIMUS sales v1.0.1
             </div>
           </footer>
         </div>
-      </KioskWrapper>
+      </salesWrapper>
     </AuthGuard>
   );
 }

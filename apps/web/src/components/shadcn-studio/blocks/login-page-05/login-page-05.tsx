@@ -27,7 +27,7 @@ const Login = () => {
 
           <div className='mt-6 flex items-center gap-4'>
             <Separator className='flex-1' />
-            <p className='text-muted-foreground text-sm'>MAXIMUS ERP</p>
+            <p className='text-muted-foreground text-sm'>MAXIMUS SALES</p>
             <Separator className='flex-1' />
           </div>
         </CardContent>

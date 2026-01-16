@@ -1,5 +1,5 @@
 /**
- * Kiosk Wrapper
+ * sales Wrapper
  * Screensaver + Main content нэгтгэх
  * 120 сек хөдөлгөөнгүй бол screensaver
  * Хөдөлгөөн илэрвэл /products руу очно
@@ -9,16 +9,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
-import { ProductScreensaver } from '@/components/kiosk/product-screensaver';
+import { ProductScreensaver } from '@/components/sales/product-screensaver';
 import { useProductStore } from '@/stores/product-store';
 import { getToken, getDefaultWarehouse } from '@/lib/auth';
 
-interface KioskWrapperProps {
+interface salesWrapperProps {
   children: React.ReactNode;
   idleTimeout?: number; // milliseconds, default 120 seconds
 }
 
-export function KioskWrapper({ children, idleTimeout = 120000 }: KioskWrapperProps) {
+export function salesWrapper({ children, idleTimeout = 120000 }: salesWrapperProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [showScreensaver, setShowScreensaver] = useState(false);

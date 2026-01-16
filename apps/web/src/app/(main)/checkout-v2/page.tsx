@@ -172,7 +172,7 @@ export default function MultiStepCheckoutPage() {
     const [deliveryMethod, setDeliveryMethod] = useState<string>('office_pickup');
     const [priority, setPriority] = useState<string>('normal');
     const [notes, setNotes] = useState('');
-    // Discount is always disabled for kiosk
+    // Discount is always disabled for sales
     const useDiscount = false;
 
     // Step 2: Finish form data

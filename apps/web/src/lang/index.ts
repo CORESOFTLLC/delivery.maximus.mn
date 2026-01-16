@@ -17,7 +17,7 @@ const translations: Record<Locale, TranslationKeys> = {
 
 // Default locale
 const DEFAULT_LOCALE: Locale = 'mn';
-const LOCALE_STORAGE_KEY = 'kiosk-locale';
+const LOCALE_STORAGE_KEY = 'sales-locale';
 
 /**
  * Get current locale from localStorage

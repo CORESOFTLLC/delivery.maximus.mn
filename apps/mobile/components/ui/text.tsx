@@ -18,10 +18,17 @@ const sizeMap = {
 export const Text: React.FC<TextProps> = ({ 
   className = '', 
   size = 'md',
+  style,
   ...props 
 }) => {
   const sizeClass = sizeMap[size];
-  return <RNText className={`${sizeClass} text-typography-900 ${className}`} {...props} />;
+  return (
+    <RNText 
+      className={`${sizeClass} text-typography-900 ${className}`}
+      style={[{ fontFamily: 'GIP-Regular' }, style]} 
+      {...props} 
+    />
+  );
 };
 
 export default Text;

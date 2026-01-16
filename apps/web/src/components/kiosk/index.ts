@@ -1,5 +1,5 @@
 /**
- * Kiosk Components
+ * sales Components
  */
-export { KioskWrapper } from './kiosk-wrapper';
+export { salesWrapper } from './sales-wrapper';
 export { ProductScreensaver } from './product-screensaver';
