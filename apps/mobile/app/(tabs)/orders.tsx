@@ -12,13 +12,14 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Animated, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { 
-  ClipboardList, Building2, ChevronRight, Trash2, Gift, 
-  ImageIcon, Filter, AlertCircle 
+import {
+  ClipboardList, Building2, ChevronRight, Trash2, Gift,
+  ImageIcon, Filter, AlertCircle, MapPin, Hash, Calendar, FileText, MessageSquare
 } from 'lucide-react-native';
 import { Box, VStack, HStack, Text, Heading } from '../../components/ui';
 import { useAuthStore } from '../../stores/auth-store';
-import { getOrders, type Order } from '../../services/api';
+import { useVisitorStore } from '../../stores/visitor-store';
+import { getOrders, type Order, type Visitor } from '../../services/api';
 
 type TabType = 'today' | 'active' | 'history' | 'visited';
 
@@ -34,7 +35,14 @@ const PAGE_SIZE = 20;
 export default function OrdersScreen() {
   const { user, erpDetails } = useAuthStore();
   const router = useRouter();
-  
+
+  // Visitor store
+  const {
+    visitors,
+    isLoading: visitorsLoading,
+    fetchVisitors,
+  } = useVisitorStore();
+
   const [activeTab, setActiveTab] = useState<TabType>('active');
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,13 +57,13 @@ export default function OrdersScreen() {
   const getDates = useCallback(() => {
     const endDate = new Date();
     const startDate = new Date();
-    
+
     if (activeTab === 'today') {
       startDate.setHours(0, 0, 0, 0);
     } else {
       startDate.setMonth(startDate.getMonth() - 3);
     }
-    
+
     return {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
@@ -79,12 +87,12 @@ export default function OrdersScreen() {
     } else {
       setIsLoadingMore(true);
     }
-    
+
     setError(null);
-    
+
     const { startDate, endDate } = getDates();
     const tabName = activeTab === 'history' ? 'history' : 'active';
-    
+
     const result = await getOrders({
       page: pageNum,
       pageSize: PAGE_SIZE,
@@ -93,47 +101,78 @@ export default function OrdersScreen() {
       endDate,
       tabName,
     });
-    
+
     if (result.success && result.data) {
       let newOrders = result.data;
-      
+
       // Filter for today if needed
       if (activeTab === 'today') {
         const today = new Date().toISOString().split('T')[0];
         newOrders = newOrders.filter(o => o.date.startsWith(today));
       }
-      
+
       if (pageNum === 1) {
         setOrders(newOrders);
       } else {
         setOrders(prev => [...prev, ...newOrders]);
       }
-      
+
       setTotalCount(result.totalRecords || 0);
       setHasMore(newOrders.length === PAGE_SIZE);
     } else {
       setError(result.error || 'Захиалгууд татахад алдаа');
     }
-    
+
     setIsLoading(false);
     setIsLoadingMore(false);
     setRefreshing(false);
   }, [user, erpDetails, activeTab, getDates]);
+
+  // Fetch visitors for 'visited' tab
+  const fetchVisitorsData = useCallback(async (isRefresh = false) => {
+    const routeId = erpDetails?.[0]?.routeId;
+    if (!routeId) {
+      setError('Route ID олдсонгүй');
+      return;
+    }
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    await fetchVisitors(routeId);
+
+    setIsLoading(false);
+    setRefreshing(false);
+  }, [erpDetails, fetchVisitors]);
 
   // Initial fetch
   useEffect(() => {
     setPage(1);
     setOrders([]);
     setHasMore(true);
-    fetchOrders(1);
+
+    if (activeTab === 'visited') {
+      fetchVisitorsData();
+    } else {
+      fetchOrders(1);
+    }
   }, [activeTab]);
 
   // Handle refresh
   const onRefresh = useCallback(() => {
     setPage(1);
     setHasMore(true);
-    fetchOrders(1, true);
-  }, [fetchOrders]);
+
+    if (activeTab === 'visited') {
+      fetchVisitorsData(true);
+    } else {
+      fetchOrders(1, true);
+    }
+  }, [activeTab, fetchOrders, fetchVisitorsData]);
 
   // Handle load more
   const handleLoadMore = useCallback(() => {
@@ -149,7 +188,7 @@ export default function OrdersScreen() {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const paddingToBottom = 100;
     const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-    
+
     if (isCloseToBottom) {
       handleLoadMore();
     }
@@ -186,14 +225,14 @@ export default function OrdersScreen() {
       {/* Tab Bar */}
       <View style={styles.tabBar}>
         {/* Animated indicator */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.tabIndicator,
-            { 
+            {
               width: tabWidth - 6,
-              transform: [{ translateX }] 
+              transform: [{ translateX }]
             }
-          ]} 
+          ]}
         />
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -211,10 +250,14 @@ export default function OrdersScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerText}>Сүүлийн 3 сарын борлуулалтын мэдээлэл</Text>
+        <Text style={styles.headerText}>
+          {activeTab === 'visited' ? 'Зочилсон бүртгэлийн мэдээлэл' : 'Сүүлийн 3 сарын борлуулалтын мэдээлэл'}
+        </Text>
         <HStack className="items-center" space="sm">
           <Text style={styles.countText}>
-            Нийт: <Text style={{ fontFamily: 'GIP-Bold' }}>{totalCount}</Text>
+            Нийт: <Text style={{ fontFamily: 'GIP-Bold' }}>
+              {activeTab === 'visited' ? visitors.length : totalCount}
+            </Text>
           </Text>
           <TouchableOpacity style={styles.filterButton}>
             <Filter size={18} color="#2563EB" />
@@ -223,7 +266,7 @@ export default function OrdersScreen() {
       </View>
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         onScroll={handleScroll}
         scrollEventThrottle={400}
@@ -239,7 +282,7 @@ export default function OrdersScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Loading */}
-        {isLoading && (
+        {(isLoading || (activeTab === 'visited' && visitorsLoading)) && (
           <Box className="flex-1 justify-center items-center py-20">
             <ActivityIndicator size="large" color="#2563EB" />
             <Text className="mt-4 text-typography-500">Ачаалж байна...</Text>
@@ -247,7 +290,7 @@ export default function OrdersScreen() {
         )}
 
         {/* Error */}
-        {error && !isLoading && (
+        {error && !isLoading && !visitorsLoading && (
           <Box className="flex-1 justify-center items-center py-20">
             <AlertCircle size={48} color="#DC2626" />
             <Text className="mt-4 text-typography-500">{error}</Text>
@@ -255,21 +298,113 @@ export default function OrdersScreen() {
         )}
 
         {/* Empty */}
-        {!isLoading && !error && orders.length === 0 && (
+        {!isLoading && !error && activeTab !== 'visited' && orders.length === 0 && (
           <Box className="flex-1 justify-center items-center py-20">
             <ClipboardList size={48} color="#9CA3AF" />
             <Text size="md" className="text-typography-500 mt-4">Захиалга олдсонгүй</Text>
           </Box>
         )}
 
+        {/* Empty Visitors */}
+        {!isLoading && !error && activeTab === 'visited' && visitors.length === 0 && (
+          <Box className="flex-1 justify-center items-center py-20">
+            <Building2 size={48} color="#9CA3AF" />
+            <Text size="md" className="text-typography-500 mt-4">Зочилсон бүртгэл олдсонгүй</Text>
+          </Box>
+        )}
+
+        {/* Visitors List */}
+        {!isLoading && !error && activeTab === 'visited' && visitors.length > 0 && (
+          <VStack className="px-4">
+            {visitors.map((visitor, index) => (
+              <View
+                key={visitor.uuid || `visitor-${index}`}
+                style={styles.visitorCard}
+              >
+                {/* Header Row */}
+                <View style={styles.visitorHeader}>
+                  <View style={styles.visitorIndex}>
+                    <Text style={styles.visitorIndexText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.visitorHeaderContent}>
+                    <Text style={styles.visitorCompanyName} numberOfLines={1}>
+                      {visitor.customers || visitor.customerName || 'Харилцагч'}
+                    </Text>
+                    <View style={styles.visitorStatusBadge}>
+                      <Text style={styles.visitorStatusText}>Зочилсон</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Info Rows */}
+                <View style={styles.visitorInfoContainer}>
+                  {/* Row 1: Дугаар + Огноо */}
+                  <View style={styles.visitorInfoRow}>
+                    {visitor.number && (
+                      <View style={styles.visitorInfoItem}>
+                        <Hash size={14} color="#9CA3AF" />
+                        <Text style={styles.visitorInfoValue}>{visitor.number}</Text>
+                      </View>
+                    )}
+                    <View style={styles.visitorInfoItem}>
+                      <Calendar size={14} color="#9CA3AF" />
+                      <Text style={styles.visitorInfoValue}>
+                        {visitor.date || visitor.createdAt || '-'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Row 2: Шалтгаан */}
+                  {visitor.visitorDescriptionList && (
+                    <View style={styles.visitorInfoRow}>
+                      <View style={styles.visitorInfoItemFull}>
+                        <FileText size={14} color="#D97706" />
+                        <View style={styles.visitorReasonBadge}>
+                          <Text style={styles.visitorReasonText}>
+                            {visitor.visitorDescriptionList}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Row 3: Тайлбар */}
+                  {visitor.visitorDescription && (
+                    <View style={styles.visitorInfoRow}>
+                      <View style={styles.visitorInfoItemFull}>
+                        <MessageSquare size={14} color="#6B7280" />
+                        <Text style={styles.visitorInfoValue}>
+                          {visitor.visitorDescription}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Row 4: Байршил */}
+                  {visitor.latitude && visitor.longitude && (
+                    <View style={styles.visitorInfoRow}>
+                      <View style={styles.visitorInfoItemFull}>
+                        <MapPin size={14} color="#10B981" />
+                        <Text style={styles.visitorLocationText}>
+                          {visitor.latitude}, {visitor.longitude}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </VStack>
+        )}
+
         {/* Orders List */}
-        {!isLoading && !error && orders.length > 0 && (
+        {!isLoading && !error && activeTab !== 'visited' && orders.length > 0 && (
           <VStack className="px-4">
             {sortedDates.map((date) => (
               <View key={date}>
                 {/* Date Header */}
                 <Text style={styles.dateHeader}>{date.replace(/-/g, ' · ')}</Text>
-                
+
                 {/* Orders for this date */}
                 {groupedOrders[date].map((order, index) => {
                   // Calculate global index
@@ -291,12 +426,12 @@ export default function OrdersScreen() {
                     >
                       {/* Index */}
                       <Text style={styles.orderIndex}>{globalIndex}</Text>
-                      
+
                       {/* Image placeholder */}
                       <View style={styles.orderImage}>
                         <ImageIcon size={20} color="#9CA3AF" />
                       </View>
-                      
+
                       {/* Content */}
                       <View style={styles.orderContent}>
                         {/* Row 1: Company name + Status */}
@@ -316,13 +451,13 @@ export default function OrdersScreen() {
                             </Text>
                           </View>
                         </View>
-                        
+
                         {/* Row 2: Order code + Product count */}
                         <View style={styles.orderRow}>
                           <Text style={styles.orderCode}>{order.orderCode}</Text>
                           <Text style={styles.productCount}>{order.products?.length || 0} төрөл</Text>
                         </View>
-                        
+
                         {/* Row 3: Badges */}
                         <View style={styles.orderRow}>
                           <HStack className="items-center" space="xs">
@@ -345,7 +480,7 @@ export default function OrdersScreen() {
                           </HStack>
                         </View>
                       </View>
-                      
+
                       {/* Chevron */}
                       <ChevronRight size={20} color="#9CA3AF" />
                     </TouchableOpacity>
@@ -353,7 +488,7 @@ export default function OrdersScreen() {
                 })}
               </View>
             ))}
-            
+
             {/* Load More Indicator */}
             {isLoadingMore && (
               <Box className="py-4 items-center">
@@ -361,7 +496,7 @@ export default function OrdersScreen() {
                 <Text style={styles.loadingMoreText}>Ачаалж байна...</Text>
               </Box>
             )}
-            
+
             {/* End of List */}
             {!hasMore && orders.length > 0 && (
               <Box className="py-4 items-center">
@@ -556,5 +691,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
+  },
+  // Visitor Card Styles
+  visitorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  visitorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  visitorIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  visitorIndexText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
+  },
+  visitorHeaderContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  visitorCompanyName: {
+    fontSize: 15,
+    fontFamily: 'GIP-SemiBold',
+    color: '#111827',
+    flex: 1,
+    marginRight: 8,
+  },
+  visitorStatusBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  visitorStatusText: {
+    fontSize: 11,
+    fontFamily: 'GIP-Medium',
+    color: '#10B981',
+  },
+  visitorInfoContainer: {
+    gap: 8,
+  },
+  visitorInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  visitorInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  visitorInfoItemFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  visitorInfoValue: {
+    fontSize: 13,
+    fontFamily: 'GIP-Medium',
+    color: '#374151',
+  },
+  visitorReasonBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  visitorReasonText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#D97706',
+  },
+  visitorLocationText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
   },
 });

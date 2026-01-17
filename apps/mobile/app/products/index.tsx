@@ -36,11 +36,11 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
   TextInput,
@@ -53,11 +53,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  ChevronLeft, 
-  Search, 
-  Grid3X3, 
-  List, 
+import {
+  ChevronLeft,
+  Search,
+  Grid3X3,
+  List,
   Package,
   X,
   Filter,
@@ -72,8 +72,10 @@ import { Box, HStack, VStack, Text, Heading } from '../../components/ui';
 import { useAuthStore } from '../../stores/auth-store';
 import { useCartStore, type ProductForCart, type CartItemStock } from '../../stores/cart-store';
 import { useWarehouseStore } from '../../stores/warehouse-store';
+import { useTemplateStore } from '../../stores/template-store';
 import { getProducts, type Product, type Category, type Brand } from '../../services/api';
 import { NumberPad } from '../../components/NumberPad';
+import { useLocalSearchParams } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const GRID_ITEM_WIDTH = (width - 24) / 2; // 2 columns with 8px padding each side + 8px gap
@@ -86,8 +88,10 @@ const formatStock = (stock: number): string => {
 
 export default function ProductsScreen() {
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isTemplateMode = mode === 'template';
   const { erpDetails } = useAuthStore();
-  
+
   // Cart Store
   const {
     selectedPartner,
@@ -96,16 +100,26 @@ export default function ProductsScreen() {
     getItemQuantity,
     getCartItemCount,
   } = useCartStore();
-  
+
   // Warehouse Store
   const { selectedWarehouse, getSelectedPriceTypeId } = useWarehouseStore();
-  
+
+  // Template Store
+  const {
+    templates,
+    isInitialized: templatesInitialized,
+    initDatabase,
+    loadTemplates,
+    addToTemplate,
+    isInTemplate,
+  } = useTemplateStore();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(1);
@@ -120,7 +134,7 @@ export default function ProductsScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
-  
+
   // NumberPad States
   const [showNumberPad, setShowNumberPad] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -136,9 +150,9 @@ export default function ProductsScreen() {
   // Extract unique categories and brands from all products
   const fetchFiltersFromProducts = useCallback(async () => {
     if (!warehouseId || !routeId || !priceTypeId) return;
-    
+
     setFiltersLoading(true);
-    
+
     // Fetch all products (large page size to get all)
     const result = await getProducts({
       page: 1,
@@ -147,12 +161,12 @@ export default function ProductsScreen() {
       routeId,
       priceTypeId,
     });
-    
+
     if (result.success && result.data) {
       // Extract unique categories from products
       const uniqueCategories = new Map<string, Category>();
       const uniqueBrands = new Map<string, Brand>();
-      
+
       result.data.forEach(product => {
         // Add category if exists
         if (product.category?.uuid && product.category?.name) {
@@ -161,7 +175,7 @@ export default function ProductsScreen() {
             name: product.category.name,
           });
         }
-        
+
         // Add brand if exists (with categoryUID for filtering)
         if (product.brand?.uuid && product.brand?.name) {
           uniqueBrands.set(product.brand.uuid, {
@@ -171,16 +185,16 @@ export default function ProductsScreen() {
           });
         }
       });
-      
+
       // Sort alphabetically
       const sortedCategories = Array.from(uniqueCategories.values()).sort((a, b) => a.name.localeCompare(b.name));
       const sortedBrands = Array.from(uniqueBrands.values()).sort((a, b) => a.name.localeCompare(b.name));
-      
+
       setCategories(sortedCategories);
       setAllBrands(sortedBrands);
       setFilteredBrands(sortedBrands);
     }
-    
+
     setFiltersLoading(false);
   }, [warehouseId, routeId, priceTypeId]);
 
@@ -188,6 +202,18 @@ export default function ProductsScreen() {
   useEffect(() => {
     fetchFiltersFromProducts();
   }, [warehouseId, routeId, priceTypeId]);
+
+  // Initialize template database and load templates for template mode
+  useEffect(() => {
+    if (isTemplateMode) {
+      if (!templatesInitialized) {
+        initDatabase();
+      }
+      if (templatesInitialized && selectedPartner?.id) {
+        loadTemplates(selectedPartner.id);
+      }
+    }
+  }, [isTemplateMode, templatesInitialized, selectedPartner?.id, initDatabase, loadTemplates]);
 
   // When category selection changes, filter brands client-side
   useEffect(() => {
@@ -269,20 +295,20 @@ export default function ProductsScreen() {
   // Filter handlers
   const toggleCategory = (uuid: string) => {
     setSelectedCategories(prev => {
-      const newSelection = prev.includes(uuid) 
+      const newSelection = prev.includes(uuid)
         ? prev.filter(id => id !== uuid)
         : [...prev, uuid];
-      
+
       // When category changes, clear selected brands (they may not be available)
       setSelectedBrands([]);
-      
+
       return newSelection;
     });
   };
 
   const toggleBrand = (uuid: string) => {
-    setSelectedBrands(prev => 
-      prev.includes(uuid) 
+    setSelectedBrands(prev =>
+      prev.includes(uuid)
         ? prev.filter(id => id !== uuid)
         : [...prev, uuid]
     );
@@ -302,13 +328,13 @@ export default function ProductsScreen() {
   // ============================================================================
   // ХЯМДРАЛТАЙ ҮНЭ ТООЦООЛОХ (isSale = true үед 50% хямдрал)
   // ============================================================================
-  
+
   /**
    * isSaleWarehouse: Сонгосон агуулах хямдралтай эсэх
    * isSale = true үед бүх барааны үнэ 50% хямдарна
    */
   const isSaleWarehouse = selectedWarehouse?.isSale || false;
-  
+
   /**
    * getDiscountedPrice: Хямдралтай үнэ тооцоолох
    * @param originalPrice - Үндсэн үнэ
@@ -321,7 +347,7 @@ export default function ProductsScreen() {
     }
     return originalPrice;
   }, [isSaleWarehouse]);
-  
+
   /**
    * formatPrice: Үнэ форматлах (зөвхөн хямдралтай үнэ буцаана)
    */
@@ -334,7 +360,7 @@ export default function ProductsScreen() {
   // ============================================================================
   // БАРАА САГСАНД НЭМЭХ HANDLERS
   // ============================================================================
-  
+
   /**
    * handleProductPress: Бараа дээр дарсан үед NumberPad нээх
    */
@@ -346,30 +372,66 @@ export default function ProductsScreen() {
         'Бараа сагсалахын өмнө харилцагч сонгох шаардлагатай.',
         [
           { text: 'Болих', style: 'cancel' },
-          { 
-            text: 'Харилцагч сонгох', 
+          {
+            text: 'Харилцагч сонгох',
             onPress: () => router.push('/partners'),
           },
         ]
       );
       return;
     }
-    
+
+    // Template mode - add to template directly
+    if (isTemplateMode) {
+      handleAddToTemplate(product);
+      return;
+    }
+
     setSelectedProduct(product);
     setShowNumberPad(true);
-  }, [selectedPartner, router]);
-  
+  }, [selectedPartner, router, isTemplateMode]);
+
+  /**
+   * handleAddToTemplate: Загварт нэмэх
+   */
+  const handleAddToTemplate = useCallback((product: Product) => {
+    if (!selectedPartner?.id) return;
+
+    // Check if already in template
+    if (isInTemplate(selectedPartner.id, product.uuid)) {
+      Alert.alert('Мэдээлэл', 'Энэ бараа аль хэдийн загварт нэмэгдсэн байна.');
+      return;
+    }
+
+    // Get default stock type (first one or BOX if available)
+    const defaultStockType = product.stockTypes?.find(st => st.name === 'BOX') || product.stockTypes?.[0];
+
+    addToTemplate(selectedPartner.id, {
+      productId: product.uuid,
+      productName: product.name,
+      productPrice: product.price,
+      productMoq: product.moq,
+      quantity: product.moq || 1,
+      stockTypeId: defaultStockType?.uuid,
+      stockTypeName: defaultStockType?.name,
+      brandName: product.brand?.name,
+      categoryName: product.category?.name,
+    });
+
+    Alert.alert('Амжилттай', `"${product.name}" загварт нэмэгдлээ`);
+  }, [selectedPartner?.id, addToTemplate, isInTemplate]);
+
   /**
    * handleAddToCart: NumberPad-с confirm хийсэн үед
    */
   const handleAddToCart = useCallback((product: ProductForCart, stocks: CartItemStock[]) => {
     addItem(product, stocks);
-    
+
     // Амжилттай нэмсэн мессеж
     // Alert биш toast ашиглах нь дээр, одоогоор Alert
     // Toast component нэмж болно
   }, [addItem]);
-  
+
   /**
    * getProductCartQuantity: Бараа сагсанд хэдэн ширхэг байгааг авах
    */
@@ -381,10 +443,15 @@ export default function ProductsScreen() {
   const renderGridItem = ({ item, index }: { item: Product; index: number }) => {
     const cartQty = getProductCartQuantity(item.uuid);
     const isInCart = cartQty > 0;
-    
+    const isInTemplateList = isTemplateMode && selectedPartner?.id && isInTemplate(selectedPartner.id, item.uuid);
+
     return (
-      <TouchableOpacity 
-        style={[styles.gridItem, isInCart && styles.gridItemInCart]} 
+      <TouchableOpacity
+        style={[
+          styles.gridItem,
+          isInCart && styles.gridItemInCart,
+          isInTemplateList && styles.gridItemInTemplate
+        ]}
         activeOpacity={0.7}
         onPress={() => handleProductPress(item)}
       >
@@ -395,42 +462,49 @@ export default function ProductsScreen() {
           ) : (
             <Package size={36} color="#D1D5DB" />
           )}
-          
+
           {/* Stock Badge - Top Right */}
           <View style={styles.gridStockBadge}>
             <Text style={styles.gridStockText}>{formatStock(item.stock || 0)}</Text>
           </View>
-          
+
           {/* Brand Badge - Top Left */}
           {item.brand?.name && (
             <View style={styles.gridBrandBadge}>
               <Text style={styles.gridBrandText} numberOfLines={1}>{item.brand.name}</Text>
             </View>
           )}
-          
+
           {/* Cart Quantity Badge - Bottom Right */}
           {isInCart && (
             <View style={styles.gridCartBadge}>
               <Text style={styles.gridCartBadgeText}>{cartQty}</Text>
             </View>
           )}
+
+          {/* Template Badge - Show if in template */}
+          {isInTemplateList && (
+            <View style={styles.gridTemplateBadge}>
+              <Check size={12} color="#FFFFFF" />
+            </View>
+          )}
         </View>
-        
+
         {/* Product Info */}
         <View style={styles.gridInfo}>
           {/* Product Code */}
           <Text style={styles.gridProductCode}>{item.code}</Text>
-          
+
           {/* Product Name with Index */}
           <Text style={styles.gridProductName} numberOfLines={2}>
             <Text style={styles.gridIndexText}>{index + 1}. </Text>{item.name}
           </Text>
-          
+
           {/* MOQ indicator */}
           {item.moq > 1 && (
             <Text style={styles.gridMoqText}>MOQ: {item.moq}</Text>
           )}
-          
+
           {/* Price Row - 50% хямдралтай үнэ isSale үед */}
           <View style={styles.gridPriceRow}>
             <View style={{ flex: 1 }}>
@@ -441,10 +515,10 @@ export default function ProductsScreen() {
                 {formatPrice(item.price)}
               </Text>
             </View>
-            
+
             {/* Add to Cart Button */}
-            <TouchableOpacity 
-              style={[styles.gridAddButton, isInCart && styles.gridAddButtonInCart]} 
+            <TouchableOpacity
+              style={[styles.gridAddButton, isInCart && styles.gridAddButtonInCart]}
               activeOpacity={0.8}
               onPress={() => handleProductPress(item)}
             >
@@ -455,7 +529,7 @@ export default function ProductsScreen() {
               )}
             </TouchableOpacity>
           </View>
-          
+
           {/* Sale Badge */}
           {isSaleWarehouse && (
             <View style={styles.saleBadge}>
@@ -470,10 +544,10 @@ export default function ProductsScreen() {
   const renderListItem = ({ item, index }: { item: Product; index: number }) => {
     const cartQty = getProductCartQuantity(item.uuid);
     const isInCart = cartQty > 0;
-    
+
     return (
-      <TouchableOpacity 
-        style={[styles.listItem, isInCart && styles.listItemInCart]} 
+      <TouchableOpacity
+        style={[styles.listItem, isInCart && styles.listItemInCart]}
         activeOpacity={0.7}
         onPress={() => handleProductPress(item)}
       >
@@ -491,14 +565,14 @@ export default function ProductsScreen() {
             </View>
           )}
         </View>
-        
+
         {/* Product Info */}
         <VStack style={{ flex: 1, gap: 2 }}>
           <Text style={styles.listProductName} numberOfLines={2}>
             <Text style={styles.listIndexText}>{index + 1}. </Text>{item.name}
           </Text>
           <Text style={styles.listProductCode}>{item.code}</Text>
-          
+
           <HStack style={{ alignItems: 'center', gap: 8, marginTop: 4 }}>
             {item.brand?.name && (
               <View style={styles.brandBadgeSmall}>
@@ -523,7 +597,7 @@ export default function ProductsScreen() {
             )}
           </HStack>
         </VStack>
-        
+
         {/* Price & Stock */}
         <VStack style={{ alignItems: 'flex-end', gap: 4 }}>
           {/* Price with discount indicator */}
@@ -537,7 +611,7 @@ export default function ProductsScreen() {
             <Text style={styles.stockTextSmall}>{formatStock(item.stock || 0)} ш</Text>
           </View>
           {/* Add button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.listAddButton, isInCart && styles.listAddButtonInCart]}
             onPress={() => handleProductPress(item)}
           >
@@ -564,45 +638,54 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isTemplateMode && styles.headerTemplate]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={24} color="#111827" />
         </TouchableOpacity>
         <VStack style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Барааны жагсаалт</Text>
-          <Text style={styles.headerSubtitle}>{totalCount.toLocaleString()} бараа</Text>
+          <Text style={styles.headerTitle}>
+            {isTemplateMode ? 'Загварт бараа нэмэх' : 'Барааны жагсаалт'}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {isTemplateMode
+              ? `${selectedPartner?.name || ''} - ${templates.filter(t => t.partnerId === selectedPartner?.id).length} загвар`
+              : `${totalCount.toLocaleString()} бараа`
+            }
+          </Text>
         </VStack>
         <HStack style={{ gap: 8 }}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
             onPress={() => setViewMode('grid')}
           >
             <Grid3X3 size={18} color={viewMode === 'grid' ? '#FFFFFF' : '#6B7280'} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
             onPress={() => setViewMode('list')}
           >
             <List size={18} color={viewMode === 'list' ? '#FFFFFF' : '#6B7280'} />
           </TouchableOpacity>
-          {/* Cart Button */}
-          <TouchableOpacity 
-            style={styles.cartButton}
-            onPress={() => router.push('/cart')}
-          >
-            <ShoppingCart size={20} color="#2563EB" />
-            {cartItemCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {/* Cart Button - hide in template mode */}
+          {!isTemplateMode && (
+            <TouchableOpacity
+              style={styles.cartButton}
+              onPress={() => router.push('/cart')}
+            >
+              <ShoppingCart size={20} color="#2563EB" />
+              {cartItemCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </HStack>
       </View>
-      
+
       {/* Selected Partner Info Bar */}
       {selectedPartner && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.partnerBar}
           onPress={() => router.push(`/partner/${selectedPartner.id}`)}
         >
@@ -637,9 +720,9 @@ export default function ProductsScreen() {
               </TouchableOpacity>
             )}
           </View>
-          
+
           {/* Filter Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.filterButton, activeFiltersCount > 0 && styles.filterButtonActive]}
             onPress={() => setShowFilterModal(true)}
           >
@@ -651,11 +734,11 @@ export default function ProductsScreen() {
             )}
           </TouchableOpacity>
         </View>
-        
+
         {/* Active Filters Display */}
         {activeFiltersCount > 0 && (
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.activeFiltersContainer}
             contentContainerStyle={styles.activeFiltersContent}
@@ -663,7 +746,7 @@ export default function ProductsScreen() {
             {selectedCategories.map(catId => {
               const cat = categories.find(c => c.uuid === catId);
               return cat ? (
-                <TouchableOpacity 
+                <TouchableOpacity
                   key={catId}
                   style={styles.activeFilterChip}
                   onPress={() => toggleCategory(catId)}
@@ -676,7 +759,7 @@ export default function ProductsScreen() {
             {selectedBrands.map(brandId => {
               const brand = allBrands.find(b => b.uuid === brandId);
               return brand ? (
-                <TouchableOpacity 
+                <TouchableOpacity
                   key={brandId}
                   style={[styles.activeFilterChip, styles.activeFilterChipBrand]}
                   onPress={() => toggleBrand(brandId)}
@@ -686,7 +769,7 @@ export default function ProductsScreen() {
                 </TouchableOpacity>
               ) : null;
             })}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.clearFiltersButton}
               onPress={clearAllFilters}
             >
@@ -714,7 +797,7 @@ export default function ProductsScreen() {
               <Text style={styles.filterClearAllText}>Цэвэрлэх</Text>
             </TouchableOpacity>
           </View>
-          
+
           {/* Filter Content - Categories and Brands in one scroll */}
           <ScrollView style={styles.filterScrollView} showsVerticalScrollIndicator={false}>
             {/* Categories Section */}
@@ -732,84 +815,84 @@ export default function ProductsScreen() {
                   <Text style={styles.filterEmptyText}>Ангилал олдсонгүй</Text>
                 </View>
               ) : (
-                  <View style={styles.filterChipsContainer}>
-                    {categories.map(cat => (
-                      <TouchableOpacity
-                        key={cat.uuid}
-                        style={[styles.filterChip, selectedCategories.includes(cat.uuid) && styles.filterChipSelected]}
-                        onPress={() => toggleCategory(cat.uuid)}
-                      >
-                        <Text style={[styles.filterChipText, selectedCategories.includes(cat.uuid) && styles.filterChipTextSelected]}>
-                          {cat.name}
-                        </Text>
-                        {selectedCategories.includes(cat.uuid) && (
-                          <Check size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Brands Section */}
-              <View style={styles.filterSection}>
-                <View style={styles.filterSectionHeader}>
-                  <Text style={styles.filterSectionTitle}>
-                    Брэнд {selectedBrands.length > 0 && `(${selectedBrands.length})`}
-                  </Text>
-                  {selectedCategories.length > 0 && (
-                    <Text style={styles.filterSectionSubtitle}>
-                      {selectedCategories.length === 1 
-                        ? `${categories.find(c => c.uuid === selectedCategories[0])?.name || ''} ангиллын`
-                        : `${selectedCategories.length} ангиллын`
-                      }
-                    </Text>
-                  )}
+                <View style={styles.filterChipsContainer}>
+                  {categories.map(cat => (
+                    <TouchableOpacity
+                      key={cat.uuid}
+                      style={[styles.filterChip, selectedCategories.includes(cat.uuid) && styles.filterChipSelected]}
+                      onPress={() => toggleCategory(cat.uuid)}
+                    >
+                      <Text style={[styles.filterChipText, selectedCategories.includes(cat.uuid) && styles.filterChipTextSelected]}>
+                        {cat.name}
+                      </Text>
+                      {selectedCategories.includes(cat.uuid) && (
+                        <Check size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
                 </View>
-                {filtersLoading ? (
-                  <View style={styles.filterLoadingContainer}>
-                    <ActivityIndicator size="small" color="#2563EB" />
-                    <Text style={styles.filterLoadingText}>Ачаалж байна...</Text>
-                  </View>
-                ) : filteredBrands.length === 0 ? (
-                  <View style={styles.filterEmptyContainer}>
-                    <Text style={styles.filterEmptyText}>
-                      {selectedCategories.length > 0 ? 'Энэ ангилалд брэнд олдсонгүй' : 'Брэнд олдсонгүй'}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.filterChipsContainer}>
-                    {filteredBrands.map(brand => (
-                      <TouchableOpacity
-                        key={brand.uuid}
-                        style={[styles.filterChip, styles.filterChipBrand, selectedBrands.includes(brand.uuid) && styles.filterChipBrandSelected]}
-                        onPress={() => toggleBrand(brand.uuid)}
-                      >
-                        <Text style={[styles.filterChipText, styles.filterChipBrandText, selectedBrands.includes(brand.uuid) && styles.filterChipBrandTextSelected]}>
-                          {brand.name}
-                        </Text>
-                        {selectedBrands.includes(brand.uuid) && (
-                          <Check size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+              )}
+            </View>
+
+            {/* Brands Section */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <Text style={styles.filterSectionTitle}>
+                  Брэнд {selectedBrands.length > 0 && `(${selectedBrands.length})`}
+                </Text>
+                {selectedCategories.length > 0 && (
+                  <Text style={styles.filterSectionSubtitle}>
+                    {selectedCategories.length === 1
+                      ? `${categories.find(c => c.uuid === selectedCategories[0])?.name || ''} ангиллын`
+                      : `${selectedCategories.length} ангиллын`
+                    }
+                  </Text>
                 )}
               </View>
-            </ScrollView>
-            
-            {/* Modal Footer */}
-            <View style={styles.filterModalFooter}>
-              <TouchableOpacity 
-                style={styles.applyButton}
-                onPress={applyFilters}
-              >
-                <Filter size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.applyButtonText}>
-                  Хэрэглэх {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-                </Text>
-              </TouchableOpacity>
+              {filtersLoading ? (
+                <View style={styles.filterLoadingContainer}>
+                  <ActivityIndicator size="small" color="#2563EB" />
+                  <Text style={styles.filterLoadingText}>Ачаалж байна...</Text>
+                </View>
+              ) : filteredBrands.length === 0 ? (
+                <View style={styles.filterEmptyContainer}>
+                  <Text style={styles.filterEmptyText}>
+                    {selectedCategories.length > 0 ? 'Энэ ангилалд брэнд олдсонгүй' : 'Брэнд олдсонгүй'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.filterChipsContainer}>
+                  {filteredBrands.map(brand => (
+                    <TouchableOpacity
+                      key={brand.uuid}
+                      style={[styles.filterChip, styles.filterChipBrand, selectedBrands.includes(brand.uuid) && styles.filterChipBrandSelected]}
+                      onPress={() => toggleBrand(brand.uuid)}
+                    >
+                      <Text style={[styles.filterChipText, styles.filterChipBrandText, selectedBrands.includes(brand.uuid) && styles.filterChipBrandTextSelected]}>
+                        {brand.name}
+                      </Text>
+                      {selectedBrands.includes(brand.uuid) && (
+                        <Check size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
+          </ScrollView>
+
+          {/* Modal Footer */}
+          <View style={styles.filterModalFooter}>
+            <TouchableOpacity
+              style={styles.applyButton}
+              onPress={applyFilters}
+            >
+              <Filter size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.applyButtonText}>
+                Хэрэглэх {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
 
@@ -863,7 +946,7 @@ export default function ProductsScreen() {
           ListFooterComponent={renderFooter}
         />
       )}
-      
+
       {/* NumberPad Modal */}
       <NumberPad
         visible={showNumberPad}
@@ -874,13 +957,13 @@ export default function ProductsScreen() {
         product={selectedProduct}
         onAddToCart={handleAddToCart}
         currentStocks={
-          selectedProduct 
-            ? cartItems.find(i => i.productId === selectedProduct.uuid)?.stocks 
+          selectedProduct
+            ? cartItems.find(i => i.productId === selectedProduct.uuid)?.stocks
             : undefined
         }
         discountedPrice={
-          selectedProduct && isSaleWarehouse 
-            ? getDiscountedPrice(selectedProduct.price) 
+          selectedProduct && isSaleWarehouse
+            ? getDiscountedPrice(selectedProduct.price)
             : undefined
         }
       />
@@ -902,6 +985,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     gap: 12,
+  },
+  headerTemplate: {
+    backgroundColor: '#EEF2FF', // Light purple for template mode
+    borderBottomColor: '#C7D2FE',
   },
   backButton: {
     padding: 4,
@@ -1434,6 +1521,22 @@ const styles = StyleSheet.create({
   gridItemInCart: {
     borderWidth: 2,
     borderColor: '#10B981',
+  },
+  gridItemInTemplate: {
+    borderWidth: 2,
+    borderColor: '#7C3AED',
+    backgroundColor: '#FAF5FF',
+  },
+  gridTemplateBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridCartBadge: {
     position: 'absolute',

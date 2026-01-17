@@ -159,7 +159,7 @@ export async function getPartners(
 
   // BUSINESS RULE: Нэрээр хайх (partial match)
   if (options?.name) params.append('name', options.name);
-  
+
   // BUSINESS RULE: Кодоор хайх (exact match)
   if (options?.companyCode) params.append('companyCode', options.companyCode);
 
@@ -186,7 +186,7 @@ export async function getPartners(
     }
 
     const data: ERPCompaniesResponse = await response.json();
-    
+
     // Log first result to see available fields
     if (data.results.length > 0) {
       console.log('🔵 1C First Company Data:', JSON.stringify(data.results[0], null, 2));
@@ -345,7 +345,7 @@ export async function getPartnerDetail(
     if (!response.ok) {
       const errorText = await response.text();
       console.log('🔴 1C Partner Detail Error:', errorText);
-      
+
       // Parse error message from 1C response
       try {
         const errorJson = JSON.parse(errorText);
@@ -355,7 +355,7 @@ export async function getPartnerDetail(
       } catch {
         // Not JSON, use default message
       }
-      
+
       return { success: false, error: `Харилцагч олдсонгүй (${response.status})` };
     }
 
@@ -422,20 +422,20 @@ export async function getPartner(
   // If routeId provided, fetch from API
   if (routeId) {
     const result = await getPartners(token, { routeId });
-    
+
     if (!result.success || !result.data) {
       return { success: false, error: result.error };
     }
 
     const partner = result.data.find(p => p.id === id || p.erp_uuid === id);
-    
+
     if (!partner) {
       return { success: false, error: 'Харилцагч олдсонгүй' };
     }
 
     return { success: true, data: partner };
   }
-  
+
   // Without routeId, we return error (need to use partners from store)
   return { success: false, error: 'Харилцагч жагсаалтаас олох боломжгүй' };
 }
@@ -520,7 +520,7 @@ export async function getTasksByDay(
 
     const rawText = await response.text();
     console.log('🔵 1C Tasks Raw Response length:', rawText.length);
-    
+
     // Parse JSON from raw text - Tasks API returns array directly
     let data: ERPTasksResponse;
     try {
@@ -529,9 +529,9 @@ export async function getTasksByDay(
       console.log('🔴 1C Tasks JSON Parse Error:', parseError);
       return { success: false, error: 'JSON parse алдаа' };
     }
-    
+
     console.log('🔵 1C Tasks Data is array:', Array.isArray(data), 'length:', data?.length);
-    
+
     // Log first result to see available fields
     if (Array.isArray(data) && data.length > 0) {
       console.log('🔵 1C First Task Data:', JSON.stringify(data[0], null, 2));
@@ -667,7 +667,7 @@ export async function getOrders(options: {
   error?: string;
 }> {
   const url = `${ERP_BASE_URL}/hs/or/Order`;
-  
+
   const body = {
     page: options.page || 1,
     pageSize: options.pageSize || 20,
@@ -701,7 +701,7 @@ export async function getOrders(options: {
     }
 
     const data: OrdersResponse = await response.json();
-    
+
     console.log('🔵 Orders count:', data.count);
     if (data.results.length > 0) {
       console.log('🔵 First Order:', JSON.stringify(data.results[0], null, 2));
@@ -788,7 +788,7 @@ export async function getOrderDetail(options: {
   error?: string;
 }> {
   const url = `${ERP_BASE_URL}/hs/od/OrderDetail`;
-  
+
   const body = {
     username: options.username,
     uuid: options.uuid,
@@ -817,7 +817,7 @@ export async function getOrderDetail(options: {
     }
 
     const data: OrderDetail = await response.json();
-    
+
     console.log('🔵 OrderDetail:', data.orderCode, data.products?.length, 'products');
 
     return {
@@ -962,7 +962,7 @@ export async function getProducts(params: GetProductsParams): Promise<{
     }
 
     const data: ProductsResponse = await response.json();
-    
+
     console.log('🔵 Products count:', data.count);
     if (data.results?.length > 0) {
       console.log('🔵 First Product:', JSON.stringify(data.results[0], null, 2));
@@ -1033,7 +1033,7 @@ export async function getCategories(): Promise<{
 
     // Categories API returns array directly
     const data: Array<{ uuid: string; name: string }> = await response.json();
-    
+
     console.log('🔵 Categories count:', data.length);
     if (data.length > 0) {
       console.log('🔵 First Category:', JSON.stringify(data[0], null, 2));
@@ -1089,11 +1089,11 @@ export async function getBrands(categoryId?: string): Promise<{
 }> {
   const params = new URLSearchParams();
   if (categoryId) params.append('categoryId', categoryId);
-  
-  const url = params.toString() 
-    ? `${ERP_BASE_URL}/hs/br/Brands?${params}` 
+
+  const url = params.toString()
+    ? `${ERP_BASE_URL}/hs/br/Brands?${params}`
     : `${ERP_BASE_URL}/hs/br/Brands`;
-    
+
   console.log('🔵 Brands API URL:', url);
 
   try {
@@ -1116,7 +1116,7 @@ export async function getBrands(categoryId?: string): Promise<{
 
     // Brands API returns array directly
     const data: Array<{ uuid: string; name: string; categoryUID?: string }> = await response.json();
-    
+
     console.log('🔵 Brands count:', data.length);
     if (data.length > 0) {
       console.log('🔵 First Brand:', JSON.stringify(data[0], null, 2));
@@ -1132,6 +1132,158 @@ export async function getBrands(categoryId?: string): Promise<{
     };
   } catch (error) {
     console.error('Brands API error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Сүлжээний алдаа',
+    };
+  }
+}
+
+// ==========================================================================
+// VISITOR API - Зочилсон баримт
+// ==========================================================================
+
+/**
+ * Visitor: Зочилсон баримт
+ * 
+ * БИЗНЕС ЛОГИК:
+ * - Харилцагч дээр очоод захиалга үүсгээгүй бол зочилсон баримт үүсгэнэ
+ * - Зочилсон баримт үүссэн бол (isRight: true) тухайн өдөр зайнаас ч захиалга үүсгэж болно
+ */
+export interface Visitor {
+  uuid: string;
+  number?: string; // Баримтын дугаар (e.g., "000005149")
+  customerId: string;
+  customerName?: string;
+  customers?: string; // Харилцагчийн нэр API-с
+  routeId: string;
+  latitude: string;
+  longitude: string;
+  imei: string;
+  visitorDescriptionList?: string; // Зочилсон шалтгаан (e.g., "8. Засвартай")
+  visitorDescription?: string; // Нэмэлт тайлбар
+  date?: string;
+  createdAt?: string;
+}
+
+export interface CreateVisitorRequest {
+  customerId: string;
+  routeId: string;
+  latitude: string;
+  longitude: string;
+  imei: string;
+  visitorDescriptionList?: string;
+  visitorDescription?: string;
+}
+
+/**
+ * getVisitors: Зочилсон жагсаалт авах
+ * 
+ * ENDPOINT: GET /hs/vs/Visitors
+ * 
+ * QUERY PARAMETERS:
+ * - routeID: Маршрутын ID
+ * - page: Хуудас
+ */
+export async function getVisitors(routeId: string, page: number = 1): Promise<{
+  success: boolean;
+  data?: Visitor[];
+  error?: string;
+}> {
+  const url = `${ERP_BASE_URL}/hs/vs/Visitors?routeID=${routeId}&page=${page}`;
+
+  console.log('🔵 Visitors API URL:', url);
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Basic ${ERP_AUTH}`,
+      },
+    });
+
+    console.log('🔵 Visitors API Response:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('🔴 Visitors API Error:', errorText);
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+
+    const data = await response.json();
+
+    console.log('🔵 Visitors count:', Array.isArray(data) ? data.length : data?.results?.length || 0);
+
+    // Handle both array and object with results
+    const visitors = Array.isArray(data) ? data : (data.results || []);
+
+    return {
+      success: true,
+      data: visitors,
+    };
+  } catch (error) {
+    console.error('Visitors API error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Сүлжээний алдаа',
+    };
+  }
+}
+
+/**
+ * createVisitor: Зочилсон баримт үүсгэх
+ * 
+ * ENDPOINT: POST /hs/cvs/Visitor
+ * 
+ * BODY:
+ * - customerId: Харилцагчийн ID
+ * - routeId: Маршрутын ID
+ * - latitude: Өргөрөг
+ * - longitude: Уртраг
+ * - imei: Төхөөрөмжийн ID
+ * - visitorDescriptionList: Зочилсон шалтгаан ID (optional)
+ * - visitorDescription: Тайлбар (optional)
+ */
+export async function createVisitor(data: CreateVisitorRequest): Promise<{
+  success: boolean;
+  data?: Visitor;
+  error?: string;
+}> {
+  const url = `${ERP_BASE_URL}/hs/cvs/Visitor`;
+
+  console.log('🔵 Create Visitor API URL:', url);
+  console.log('🔵 Create Visitor Body:', JSON.stringify(data, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Basic ${ERP_AUTH}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    console.log('🔵 Create Visitor Response:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('🔴 Create Visitor Error:', errorText);
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+
+    const result = await response.json();
+    console.log('🔵 Create Visitor Result:', JSON.stringify(result, null, 2));
+
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    console.error('Create Visitor API error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Сүлжээний алдаа',

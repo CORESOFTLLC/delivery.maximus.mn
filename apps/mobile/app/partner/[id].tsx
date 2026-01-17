@@ -31,22 +31,25 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Linking, Platform, ActivityIndicator, Alert, SafeAreaView, Animated, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Location from 'expo-location';
-import { 
-  ArrowLeft, MapPin, Phone, Mail, Building2, Navigation, 
+import {
+  ArrowLeft, MapPin, Phone, Mail, Building2, Navigation,
   Wallet, Clock, CreditCard, FileText, ShoppingCart, AlertCircle,
   Calendar, Hash, Route, ChevronRight, TrendingUp, Edit3,
   Package, ClipboardList, Layout, Home, ImageIcon, Landmark, Truck,
-  Trash2, Gift, CheckCircle, XCircle
+  Trash2, Gift, CheckCircle, XCircle, Plus, Minus
 } from 'lucide-react-native';
-import { 
-  Box, VStack, HStack, Text, Heading, Pressable, 
+import {
+  Box, VStack, HStack, Text, Heading, Pressable,
   Button, ButtonText, Badge, BadgeText, Divider, Card
 } from '../../components/ui';
 import { usePartnerStore } from '../../stores/partner-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { useCartStore, type SelectedPartner } from '../../stores/cart-store';
 import { useWarehouseStore } from '../../stores/warehouse-store';
+import { useTemplateStore } from '../../stores/template-store';
+import { useVisitorStore } from '../../stores/visitor-store';
 import { getPartnerDetail, getOrders, type PartnerDetail, type Order } from '../../services/api';
+import * as Device from 'expo-device';
 import { What3WordsIcon } from '../../components/icons/What3WordsIcon';
 
 // Tab types
@@ -75,25 +78,46 @@ export default function PartnerDetailScreen() {
   const router = useRouter();
   const { selectedPartner } = usePartnerStore();
   const { erpDetails, user } = useAuthStore();
-  
+
   // Cart store - харилцагч сонгох
-  const { 
-    selectedPartner: cartPartner, 
+  const {
+    selectedPartner: cartPartner,
     setSelectedPartner: setCartPartner,
     hasPartner: hasCartPartner,
     itemCount: cartItemCount,
+    addItem: addToCart,
   } = useCartStore();
-  
+
   // Warehouse store - routeRange авах
   const { getRouteRange } = useWarehouseStore();
-  
+
+  // Visitor store - зочилсон баримт
+  const {
+    isPartnerVisitedToday,
+    markAsVisited,
+    isCreating: visitorCreating,
+    fetchVisitors,
+  } = useVisitorStore();
+
+  // Template store - загвар бараа
+  const {
+    templates,
+    isLoading: templatesLoading,
+    isInitialized: templatesInitialized,
+    initDatabase,
+    loadTemplates,
+    removeFromTemplate,
+    updateQuantity,
+    clearTemplate,
+  } = useTemplateStore();
+
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [partnerDetail, setPartnerDetail] = useState<PartnerDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  
+
   // ============================================================================
   // БИЗНЕС ЛОГИК: Coordinate Range шалгалт
   // ============================================================================
@@ -102,6 +126,7 @@ export default function PartnerDetailScreen() {
    * 
    * БИЗНЕС ЛОГИК:
    * - coordinateRange = 1 → GPS шалгахгүй, шууд true
+   * - Тухайн өдөр зочилсон бол (isRight=true) → GPS шалгахгүй, шууд true
    * - coordinateRange != 1 → routeRange (метр) дотор байвал true
    */
   const isWithinRange = (): boolean => {
@@ -109,29 +134,66 @@ export default function PartnerDetailScreen() {
     if (partnerDetail?.coordinateRange === 1) {
       return true;
     }
-    
+
+    // Тухайн өдөр зочилсон бол GPS шалгахгүй (isRight = true)
+    if (partnerDetail?.id && isPartnerVisitedToday(partnerDetail.id)) {
+      return true;
+    }
+
     // GPS-р шалгах
     if (!userLocation || !partnerDetail?.latitude || !partnerDetail?.longitude) {
       return false;
     }
-    
+
     const routeRange = getRouteRange(); // метрээр (default: 2000)
     const distanceInMeters = (distance || 0) * 1000; // км → метр
-    
+
     return distanceInMeters <= routeRange;
   };
-  
+
+  /**
+   * canCreateOrderRemotely: Зайнаас захиалга үүсгэж болох эсэх
+   * 
+   * БИЗНЕС ЛОГИК:
+   * - coordinateRange = 1 → true
+   * - Тухайн өдөр зочилсон бол → true
+   * - Бусад → range дотор байвал true
+   */
+  const canCreateOrderRemotely = (): boolean => {
+    if (partnerDetail?.coordinateRange === 1) {
+      return true;
+    }
+    if (partnerDetail?.id && isPartnerVisitedToday(partnerDetail.id)) {
+      return true;
+    }
+    return isWithinRange();
+  };
+
   // Orders tab state
   const [ordersTab, setOrdersTab] = useState<'active' | 'history'>('active');
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
+  // Initialize template database
+  useEffect(() => {
+    if (!templatesInitialized) {
+      initDatabase();
+    }
+  }, [templatesInitialized, initDatabase]);
+
+  // Load templates when tab changes to template or when partner changes
+  useEffect(() => {
+    if (templatesInitialized && id && activeTab === 'template') {
+      loadTemplates(id);
+    }
+  }, [templatesInitialized, id, activeTab, loadTemplates]);
+
   // Fetch partner detail from API
   useEffect(() => {
     const fetchDetail = async () => {
       if (!id) return;
-      
+
       const routeId = erpDetails?.[0]?.routeId;
       if (!routeId) {
         setError('RouteId олдсонгүй');
@@ -141,7 +203,7 @@ export default function PartnerDetailScreen() {
 
       setIsLoading(true);
       const result = await getPartnerDetail(id, routeId);
-      
+
       if (result.success && result.data) {
         setPartnerDetail(result.data);
         setError(null);
@@ -164,13 +226,13 @@ export default function PartnerDetailScreen() {
             const location = await Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Balanced,
             });
-            
+
             // Хэрэглэгчийн байршил хадгалах
             setUserLocation({
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
             });
-            
+
             const dist = calculateDistance(
               location.coords.latitude,
               location.coords.longitude,
@@ -191,7 +253,7 @@ export default function PartnerDetailScreen() {
   useEffect(() => {
     const fetchOrders = async () => {
       if (activeTab !== 'orders' || !id) return;
-      
+
       const currentUsername = user?.username;
       if (!currentUsername) {
         setOrdersError('Username олдсонгүй');
@@ -200,12 +262,12 @@ export default function PartnerDetailScreen() {
 
       setOrdersLoading(true);
       setOrdersError(null);
-      
+
       // Сүүлийн 3 сарын огноо
       const endDate = new Date();
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 3);
-      
+
       const result = await getOrders({
         page: 1,
         pageSize: 50,
@@ -215,7 +277,7 @@ export default function PartnerDetailScreen() {
         tabName: ordersTab,
         companyId: id,
       });
-      
+
       if (result.success && result.data) {
         setOrders(result.data);
       } else {
@@ -289,23 +351,28 @@ export default function PartnerDetailScreen() {
    * handleCreateOrder: "Захиалга үүсгэх" товч дарсан үед
    * 
    * БИЗНЕС ЛОГИК:
-   * 1. Coordinate range шалгах (coordinateRange=1 бол шалгахгүй)
+   * 1. Coordinate range шалгах (coordinateRange=1 эсвэл зочилсон бол шалгахгүй)
    * 2. Өөр харилцагч сонгосон бол сагс цэвэрлэх анхааруулга
    * 3. selectedPartner тохируулж products руу шилжих
    */
   const handleCreateOrder = () => {
     if (!partnerDetail) return;
-    
-    // Range шалгалт
-    if (!isWithinRange()) {
+
+    // Range шалгалт (зочилсон бол зайнаас ч захиалга үүсгэж болно)
+    if (!canCreateOrderRemotely()) {
+      // Зочилсон эсэхийг нэмэлт мессежид оруулах
+      const visitHint = partnerDetail.coordinateRange !== 1
+        ? '\n\nЭсвэл "Зочилсон" товч дарж тэмдэглээд зайнаас захиалга үүсгэж болно.'
+        : '';
+
       Alert.alert(
         'Зай хол байна',
-        'Та харилцагчийн байршилд хүрээгүй байна. Ойртсоны дараа захиалга үүсгэнэ үү.',
+        `Та харилцагчийн байршилд хүрээгүй байна. Ойртсоны дараа захиалга үүсгэнэ үү.${visitHint}`,
         [{ text: 'Ойлголоо' }]
       );
       return;
     }
-    
+
     // Өөр харилцагч сонгоход анхааруулга
     if (hasCartPartner && cartPartner?.id !== partnerDetail.id && cartItemCount > 0) {
       Alert.alert(
@@ -313,8 +380,8 @@ export default function PartnerDetailScreen() {
         `Та "${cartPartner?.name}" харилцагчид ${cartItemCount} бараа сагсласан байна.\n\nӨөр харилцагч сонгоход сагс цэвэрлэгдэх болно.`,
         [
           { text: 'Үгүй', style: 'cancel' },
-          { 
-            text: 'Тийм, солих', 
+          {
+            text: 'Тийм, солих',
             style: 'destructive',
             onPress: () => selectPartnerAndNavigate(),
           },
@@ -322,16 +389,16 @@ export default function PartnerDetailScreen() {
       );
       return;
     }
-    
+
     selectPartnerAndNavigate();
   };
-  
+
   /**
    * selectPartnerAndNavigate: Харилцагч сонгоод products руу шилжих
    */
   const selectPartnerAndNavigate = () => {
     if (!partnerDetail) return;
-    
+
     const partner: SelectedPartner = {
       id: partnerDetail.id,
       name: partnerDetail.name,
@@ -342,19 +409,35 @@ export default function PartnerDetailScreen() {
       coordinateRange: partnerDetail.coordinateRange || null,
       totalDiscountAmount: partnerDetail.totalDiscountAmount || null,
     };
-    
+
     setCartPartner(partner);
     router.push('/products');
   };
-  
+
   /**
    * handleVisit: "Зочилсон" товч дарсан үед
    * 
    * БИЗНЕС ЛОГИК:
    * - Coordinate range дотор байвал зочилсон гэж тэмдэглэнэ
+   * - API дуудаж visitor баримт үүсгэнэ
+   * - Амжилттай бол тухайн өдөр зайнаас захиалга үүсгэж болно
    */
-  const handleVisit = () => {
-    if (!isWithinRange()) {
+  const handleVisit = async () => {
+    // Зочилсон эсэхийг шалгахдаа range-г зөвхөн GPS-р шалгана
+    // (isPartnerVisitedToday дахин шалгахгүй)
+    const checkRangeForVisit = (): boolean => {
+      if (partnerDetail?.coordinateRange === 1) {
+        return true;
+      }
+      if (!userLocation || !partnerDetail?.latitude || !partnerDetail?.longitude) {
+        return false;
+      }
+      const routeRange = getRouteRange();
+      const distanceInMeters = (distance || 0) * 1000;
+      return distanceInMeters <= routeRange;
+    };
+
+    if (!checkRangeForVisit()) {
       Alert.alert(
         'Зай хол байна',
         'Та харилцагчийн байршилд хүрээгүй байна.',
@@ -362,18 +445,54 @@ export default function PartnerDetailScreen() {
       );
       return;
     }
-    
-    // TODO: Visit API call
+
+    // Аль хэдийн зочилсон эсэхийг шалгах
+    if (partnerDetail?.id && isPartnerVisitedToday(partnerDetail.id)) {
+      Alert.alert(
+        'Зочилсон',
+        'Та өнөөдөр энэ харилцагч дээр аль хэдийн зочилсон байна.',
+        [{ text: 'Ойлголоо' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Зочилсон',
       `"${partnerDetail?.name}" харилцагчид зочилсон гэж тэмдэглэх үү?`,
       [
         { text: 'Үгүй', style: 'cancel' },
-        { 
-          text: 'Тийм', 
-          onPress: () => {
-            // TODO: API call to mark visit
-            Alert.alert('Амжилттай', 'Зочилсон гэж тэмдэглэгдлээ');
+        {
+          text: 'Тийм',
+          onPress: async () => {
+            if (!partnerDetail || !userLocation) return;
+
+            const routeId = erpDetails?.[0]?.routeId;
+            if (!routeId) {
+              Alert.alert('Алдаа', 'Route ID олдсонгүй');
+              return;
+            }
+
+            // Device ID авах
+            const deviceId = Device.modelId || Device.modelName || 'unknown';
+
+            const result = await markAsVisited({
+              customerId: partnerDetail.id,
+              routeId: routeId,
+              latitude: userLocation.latitude.toString(),
+              longitude: userLocation.longitude.toString(),
+              imei: deviceId,
+              visitorDescription: 'Зочилсон',
+            });
+
+            if (result.success) {
+              Alert.alert(
+                'Амжилттай',
+                'Зочилсон гэж тэмдэглэгдлээ.\n\nТа одоо зайнаас захиалга үүсгэх боломжтой.',
+                [{ text: 'Ойлголоо' }]
+              );
+            } else {
+              Alert.alert('Алдаа', result.error || 'Зочилсон тэмдэглэхэд алдаа гарлаа');
+            }
           }
         },
       ]
@@ -423,19 +542,19 @@ export default function PartnerDetailScreen() {
                 <Box className="w-16 h-16 bg-background-100 rounded-lg items-center justify-center border border-outline-200">
                   <ImageIcon size={28} color="#9CA3AF" />
                 </Box>
-                
+
                 {/* Company Basic Info */}
                 <VStack className="flex-1" space="xs">
                   <Heading size="md" className="text-typography-900" numberOfLines={2}>
                     {partnerDetail.name}
                   </Heading>
-                  
+
                   {partnerDetail.commonName && partnerDetail.commonName !== partnerDetail.name && (
                     <Text size="sm" className="text-typography-500" numberOfLines={1}>
                       ({partnerDetail.commonName})
                     </Text>
                   )}
-                  
+
                   {/* Head Company */}
                   {partnerDetail.headCompanyName && (
                     <HStack space="xs" className="items-center">
@@ -453,7 +572,7 @@ export default function PartnerDetailScreen() {
             {/* Company Details Section */}
             <VStack space="sm">
               <Text style={styles.sectionTitle}>Компанийн мэдээлэл</Text>
-              
+
               {/* 2-column grid for short info */}
               <View style={styles.gridContainer}>
                 {/* Company Code */}
@@ -617,10 +736,10 @@ export default function PartnerDetailScreen() {
                     </TouchableOpacity>
                   ))
                 )}
-                
+
                 {/* Email */}
                 {partnerDetail.email && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.listItem}
                     onPress={() => Linking.openURL(`mailto:${partnerDetail.email}`)}
                   >
@@ -634,7 +753,7 @@ export default function PartnerDetailScreen() {
                     <ChevronRight size={18} color="#9CA3AF" />
                   </TouchableOpacity>
                 )}
-                
+
                 {/* Address */}
                 {partnerDetail.address && (
                   <TouchableOpacity style={styles.listItem} onPress={handleNavigate}>
@@ -648,7 +767,7 @@ export default function PartnerDetailScreen() {
                     <ChevronRight size={18} color="#9CA3AF" />
                   </TouchableOpacity>
                 )}
-                
+
                 {/* What3Words */}
                 {partnerDetail.what3words && (
                   <TouchableOpacity style={styles.listItem} onPress={openW3W}>
@@ -725,20 +844,20 @@ export default function PartnerDetailScreen() {
       case 'orders':
         // Tab animation for orders
         const ordersTabWidth = (Dimensions.get('window').width - 32) / 2; // 16px padding each side, 2 tabs
-        
+
         return (
           <VStack className="flex-1">
             {/* Orders Sub-tabs */}
             <View style={styles.ordersTabBar}>
               {/* Animated indicator */}
-              <Animated.View 
+              <Animated.View
                 style={[
                   styles.ordersTabIndicator,
-                  { 
+                  {
                     width: ordersTabWidth - 8,
-                    transform: [{ translateX: ordersTab === 'active' ? 0 : ordersTabWidth }] 
+                    transform: [{ translateX: ordersTab === 'active' ? 0 : ordersTabWidth }]
                   }
-                ]} 
+                ]}
               />
               <TouchableOpacity
                 style={styles.ordersTab}
@@ -807,20 +926,20 @@ export default function PartnerDetailScreen() {
                   const showDateHeader = orderDate !== prevOrderDate;
 
                   return (
-                    <View key={order.uuid}>
+                    <View key={`${order.uuid}-${index}`}>
                       {/* Date Header */}
                       {showDateHeader && (
                         <Text style={styles.orderDateHeader}>{orderDate.replace(/-/g, ' · ')}</Text>
                       )}
-                      
+
                       {/* Order Item */}
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.orderItem}
                         onPress={() => router.push(`/order/${order.uuid}`)}
                         activeOpacity={0.7}
                       >
                         <Text style={styles.orderIndex}>{index + 1}</Text>
-                        
+
                         <View style={styles.orderContent}>
                           {/* Row 1: Warehouse + Status */}
                           <View style={styles.orderRow}>
@@ -854,7 +973,7 @@ export default function PartnerDetailScreen() {
                               </Text>
                             </View>
                           </View>
-                          
+
                           {/* Row 2: Code + Product Count + Amount */}
                           <View style={styles.orderRow}>
                             <HStack className="items-center" space="xs">
@@ -866,11 +985,6 @@ export default function PartnerDetailScreen() {
                             <Text style={styles.orderAmount}>{order.totalAmount.toLocaleString()}₮</Text>
                           </View>
                         </View>
-                        
-                        {/* Cart Button - Far Right */}
-                        <View style={styles.cartButton}>
-                          <ShoppingCart size={18} color="white" />
-                        </View>
                       </TouchableOpacity>
                     </View>
                   );
@@ -881,11 +995,242 @@ export default function PartnerDetailScreen() {
         );
 
       case 'template':
+        // Filter templates for current partner
+        const partnerTemplates = templates.filter(t => t.partnerId === id);
+
         return (
-          <Box className="flex-1 justify-center items-center py-20">
-            <Layout size={48} color="#9CA3AF" />
-            <Text size="md" className="text-typography-500 mt-4">Загвар удахгүй</Text>
-          </Box>
+          <VStack space="md" className="p-4">
+            {/* Header with Add Button */}
+            <HStack className="justify-between items-center">
+              <VStack>
+                <Text style={styles.sectionTitle}>Загвар бараанууд</Text>
+                <Text size="xs" className="text-typography-500">
+                  {partnerTemplates.length} бүтээгдэхүүн
+                </Text>
+              </VStack>
+              <TouchableOpacity
+                style={styles.addTemplateButton}
+                onPress={() => {
+                  // Select partner and navigate to products to add to template
+                  if (partnerDetail) {
+                    const partner: SelectedPartner = {
+                      id: partnerDetail.id,
+                      name: partnerDetail.name,
+                      phone: partnerDetail.phoneNumbers?.[0] || null,
+                      address: partnerDetail.address || null,
+                      latitude: partnerDetail.latitude || null,
+                      longitude: partnerDetail.longitude || null,
+                      coordinateRange: partnerDetail.coordinateRange || null,
+                      totalDiscountAmount: partnerDetail.totalDiscountAmount || null,
+                    };
+                    setCartPartner(partner);
+                    router.push('/products?mode=template');
+                  }
+                }}
+              >
+                <Plus size={18} color="#FFFFFF" />
+                <Text style={styles.addTemplateButtonText}>Бараа нэмэх</Text>
+              </TouchableOpacity>
+            </HStack>
+
+            {/* Loading */}
+            {templatesLoading && (
+              <Box className="py-8 items-center">
+                <ActivityIndicator size="small" color="#2563EB" />
+              </Box>
+            )}
+
+            {/* Empty State */}
+            {!templatesLoading && partnerTemplates.length === 0 && (
+              <Box className="py-12 items-center">
+                <Layout size={48} color="#9CA3AF" />
+                <Text size="md" className="text-typography-500 mt-4">Загвар бараа байхгүй</Text>
+                <Text size="sm" className="text-typography-400 mt-1 text-center px-8">
+                  Энэ харилцагчид зориулсан загвар бараа нэмэх бол дээрх "Бараа нэмэх" товчийг дарна уу
+                </Text>
+              </Box>
+            )}
+
+            {/* Template List */}
+            {!templatesLoading && partnerTemplates.length > 0 && (
+              <VStack space="sm">
+                {partnerTemplates.map((template, index) => (
+                  <View key={template.id} style={styles.templateItem}>
+                    <View style={styles.templateIndex}>
+                      <Text style={styles.templateIndexText}>{index + 1}</Text>
+                    </View>
+
+                    <View style={styles.templateContent}>
+                      {/* Product Name & Category */}
+                      <Text style={styles.templateName} numberOfLines={2}>
+                        {template.productName}
+                      </Text>
+                      <HStack space="xs" className="mt-1">
+                        {template.brandName && (
+                          <Badge size="sm" variant="outline" action="info">
+                            <BadgeText>{template.brandName}</BadgeText>
+                          </Badge>
+                        )}
+                        {template.categoryName && (
+                          <Badge size="sm" variant="outline" action="muted">
+                            <BadgeText>{template.categoryName}</BadgeText>
+                          </Badge>
+                        )}
+                      </HStack>
+
+                      {/* Price & MOQ */}
+                      <HStack className="mt-2 items-center" space="md">
+                        <Text style={styles.templatePrice}>
+                          {template.productPrice.toLocaleString()}₮
+                        </Text>
+                        <Text style={styles.templateMoq}>
+                          MOQ: {template.productMoq}
+                        </Text>
+                      </HStack>
+                    </View>
+
+                    {/* Quantity Controls */}
+                    <View style={styles.templateActions}>
+                      <View style={styles.quantityControl}>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => {
+                            if (template.quantity > 1) {
+                              updateQuantity(id!, template.productId, template.quantity - 1);
+                            }
+                          }}
+                        >
+                          <Minus size={14} color="#6B7280" />
+                        </TouchableOpacity>
+                        <Text style={styles.quantityText}>{template.quantity}</Text>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => {
+                            updateQuantity(id!, template.productId, template.quantity + 1);
+                          }}
+                        >
+                          <Plus size={14} color="#6B7280" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Delete Button */}
+                      <TouchableOpacity
+                        style={styles.deleteTemplateButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'Устгах',
+                            `"${template.productName}" загвараас устгах уу?`,
+                            [
+                              { text: 'Үгүй', style: 'cancel' },
+                              {
+                                text: 'Тийм',
+                                style: 'destructive',
+                                onPress: () => removeFromTemplate(id!, template.productId),
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Trash2 size={16} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Add All to Cart Button */}
+                {partnerTemplates.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.addToCartButton}
+                    onPress={() => {
+                      // First ensure partner is selected
+                      if (partnerDetail) {
+                        const partner: SelectedPartner = {
+                          id: partnerDetail.id,
+                          name: partnerDetail.name,
+                          phone: partnerDetail.phoneNumbers?.[0] || null,
+                          address: partnerDetail.address || null,
+                          latitude: partnerDetail.latitude || null,
+                          longitude: partnerDetail.longitude || null,
+                          coordinateRange: partnerDetail.coordinateRange || null,
+                          totalDiscountAmount: partnerDetail.totalDiscountAmount || null,
+                        };
+                        setCartPartner(partner);
+                      }
+
+                      // Add all templates to cart
+                      let addedCount = 0;
+                      partnerTemplates.forEach(template => {
+                        addToCart(
+                          {
+                            id: template.productId,
+                            name: template.productName,
+                            code: '',
+                            price: template.productPrice,
+                            image: null,
+                            stock: 9999,
+                            stockTypes: template.stockTypeId ? [{
+                              uuid: template.stockTypeId,
+                              name: template.stockTypeName || 'PCS',
+                              pcs: 1,
+                            }] : [],
+                            moq: template.productMoq,
+                            onlyBoxSale: false,
+                            promoPoint: null,
+                          },
+                          [{
+                            stockTypeId: template.stockTypeId || 'default',
+                            stockTypeName: template.stockTypeName || 'PCS',
+                            quantity: template.quantity,
+                            pcs: 1,
+                          }]
+                        );
+                        addedCount++;
+                      });
+
+                      Alert.alert(
+                        'Амжилттай',
+                        `${addedCount} бараа сагсанд нэмэгдлээ`,
+                        [
+                          { text: 'Болсон' },
+                          {
+                            text: 'Сагс руу очих',
+                            onPress: () => router.push('/cart'),
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <ShoppingCart size={16} color="#FFFFFF" />
+                    <Text style={styles.addToCartText}>Сагсанд нэмэх</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Clear All Button */}
+                {partnerTemplates.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearTemplateButton}
+                    onPress={() => {
+                      Alert.alert(
+                        'Бүгдийг устгах',
+                        'Энэ харилцагчийн бүх загвар барааг устгах уу?',
+                        [
+                          { text: 'Үгүй', style: 'cancel' },
+                          {
+                            text: 'Тийм',
+                            style: 'destructive',
+                            onPress: () => clearTemplate(id!),
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <Trash2 size={16} color="#DC2626" />
+                    <Text style={styles.clearTemplateText}>Бүгдийг устгах</Text>
+                  </TouchableOpacity>
+                )}
+              </VStack>
+            )}
+          </VStack>
         );
 
       default:
@@ -924,8 +1269,8 @@ export default function PartnerDetailScreen() {
               onPress={() => setActiveTab(tab.key)}
             >
               <Icon size={20} color={isActive ? '#2563EB' : '#9CA3AF'} />
-              <Text 
-                size="xs" 
+              <Text
+                size="xs"
                 className={isActive ? 'text-primary-600 mt-1' : 'text-typography-400 mt-1'}
                 style={{ fontFamily: isActive ? 'GIP-Medium' : 'GIP-Regular' }}
               >
@@ -938,7 +1283,7 @@ export default function PartnerDetailScreen() {
       </View>
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
@@ -962,12 +1307,12 @@ export default function PartnerDetailScreen() {
                 const lat2 = partnerDetail.latitude * Math.PI / 180;
                 const dLat = (partnerDetail.latitude - userLocation.latitude) * Math.PI / 180;
                 const dLon = (partnerDetail.longitude - userLocation.longitude) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                          Math.cos(lat1) * Math.cos(lat2) *
-                          Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1) * Math.cos(lat2) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 const d = R * c;
-                return d >= 1000 ? `${(d/1000).toFixed(1)} км` : `${Math.round(d)} м`;
+                return d >= 1000 ? `${(d / 1000).toFixed(1)} км` : `${Math.round(d)} м`;
               })()}
             </Text>
             {partnerDetail.coordinateRange !== 1 && (
@@ -977,7 +1322,7 @@ export default function PartnerDetailScreen() {
             )}
           </Box>
         )}
-        
+
         {/* Cart count indicator */}
         {cartItemCount > 0 && cartPartner?.id === partnerDetail.id && (
           <Box style={styles.cartCountIndicator}>
@@ -985,38 +1330,53 @@ export default function PartnerDetailScreen() {
             <Text style={styles.cartCountText}>{cartItemCount} бараа сагсанд</Text>
           </Box>
         )}
-        
+
         {/* Action Buttons */}
         <HStack space="sm" className="w-full">
-          <Button 
-            size="lg" 
-            variant="outline"
-            className="flex-1 border-gray-300"
-            style={[
-              styles.actionButton,
-              !isWithinRange() && styles.actionButtonDisabled
-            ]}
-            onPress={handleVisit}
-            disabled={!isWithinRange()}
-          >
-            <MapPin size={20} color={isWithinRange() ? '#6B7280' : '#D1D5DB'} />
-            <ButtonText className={isWithinRange() ? 'ml-2 text-gray-700' : 'ml-2 text-gray-300'}>
-              Зочилсон
-            </ButtonText>
-          </Button>
-          <Button 
-            size="lg" 
+          {/* Зочилсон товч - зочилсон бол ногоон өнгөтэй */}
+          {(() => {
+            const isVisited = partnerDetail?.id && isPartnerVisitedToday(partnerDetail.id);
+            const canVisit = !isVisited && isWithinRange();
+
+            return (
+              <Button
+                size="lg"
+                variant="outline"
+                className="flex-1"
+                style={[
+                  styles.actionButton,
+                  isVisited ? styles.visitedButton : !canVisit && styles.actionButtonDisabled
+                ]}
+                onPress={handleVisit}
+                disabled={!canVisit || visitorCreating}
+              >
+                {visitorCreating ? (
+                  <ActivityIndicator size="small" color="#10B981" />
+                ) : (
+                  <MapPin size={20} color={isVisited ? '#10B981' : canVisit ? '#1F2937' : '#D1D5DB'} />
+                )}
+                <ButtonText style={{
+                  marginLeft: 8,
+                  color: isVisited ? '#10B981' : canVisit ? '#1F2937' : '#D1D5DB'
+                }}>
+                  {isVisited ? 'Зочилсон ✓' : 'Зочилсон'}
+                </ButtonText>
+              </Button>
+            );
+          })()}
+          <Button
+            size="lg"
             className="flex-1"
             style={[
               styles.actionButton,
               styles.primaryButton,
-              !isWithinRange() && styles.primaryButtonDisabled
+              !canCreateOrderRemotely() && styles.primaryButtonDisabled
             ]}
             onPress={handleCreateOrder}
-            disabled={!isWithinRange()}
+            disabled={!canCreateOrderRemotely()}
           >
-            <ShoppingCart size={20} color={isWithinRange() ? 'white' : '#9CA3AF'} />
-            <ButtonText className={isWithinRange() ? 'ml-2 text-white' : 'ml-2 text-gray-400'}>
+            <ShoppingCart size={20} color={canCreateOrderRemotely() ? 'white' : '#9CA3AF'} />
+            <ButtonText style={{ marginLeft: 8, color: canCreateOrderRemotely() ? '#FFFFFF' : '#9CA3AF' }}>
               Захиалга үүсгэх
             </ButtonText>
           </Button>
@@ -1214,6 +1574,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     borderColor: '#E5E7EB',
   },
+  visitedButton: {
+    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+  },
   primaryButton: {
     backgroundColor: '#2563EB',
   },
@@ -1396,5 +1760,127 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Template styles
+  addTemplateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  addTemplateButtonText: {
+    fontSize: 13,
+    fontFamily: 'GIP-Medium',
+    color: '#FFFFFF',
+  },
+  templateItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  templateIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  templateIndexText: {
+    fontSize: 11,
+    fontFamily: 'GIP-Medium',
+    color: '#6B7280',
+  },
+  templateContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  templateName: {
+    fontSize: 14,
+    fontFamily: 'GIP-Medium',
+    color: '#111827',
+    lineHeight: 20,
+  },
+  templatePrice: {
+    fontSize: 14,
+    fontFamily: 'GIP-Bold',
+    color: '#2563EB',
+  },
+  templateMoq: {
+    fontSize: 12,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+  },
+  templateActions: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 4,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+  },
+  quantityText: {
+    fontSize: 14,
+    fontFamily: 'GIP-Medium',
+    color: '#111827',
+    minWidth: 32,
+    textAlign: 'center',
+  },
+  deleteTemplateButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+  },
+  clearTemplateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  clearTemplateText: {
+    fontSize: 14,
+    fontFamily: 'GIP-Medium',
+    color: '#DC2626',
+  },
+  addToCartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563EB',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  addToCartText: {
+    fontSize: 14,
+    fontFamily: 'GIP-Medium',
+    color: '#FFFFFF',
   },
 });

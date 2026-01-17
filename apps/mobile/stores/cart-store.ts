@@ -96,24 +96,24 @@ export interface CartItem {
   formattedPrice: string;
   imageUrl: string | null;
   category: string | null;
-  
+
   // Stock Types
   stockTypes: StockType[];      // Боломжит нэгжүүд
   stocks: CartItemStock[];      // Сонгосон нэгжүүд
   onlyBoxSale: boolean;         // Зөвхөн хайрцагаар
-  
+
   // Quantities
   moq: number;                  // Minimum order quantity
   maxQuantity: number;          // Үлдэгдэл
   totalQuantity: number;        // Нийт ширхэг (бүх stocks-н totalPcs нийлбэр)
-  
+
   // Calculated
   totalPrice: number;           // price * totalQuantity
   formattedTotalPrice: string;
-  
+
   // Promotion
   promoPoint: number | null;    // Урамшууллын оноо
-  
+
   addedAt: string;
 }
 
@@ -183,7 +183,7 @@ const calculateCartTotals = (items: CartItem[]) => {
   const itemCount = items.length;
   const totalItems = items.reduce((sum, item) => sum + item.totalQuantity, 0);
   const totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  
+
   return {
     itemCount,
     totalItems,
@@ -203,12 +203,12 @@ interface CartState {
   selectedPartner: SelectedPartner | null;
   warehouseId: string | null;       // Сагс үүсгэсэн агуулах
   warehouseName: string | null;
-  
+
   // Order state
   draftOrderUuid: string | null;    // Step 1 дараа ERP-с ирсэн uuid
   orderStatus: 'idle' | 'draft' | 'submitting' | 'finished' | 'error';
   orderError: string | null;
-  
+
   // Computed
   itemCount: number;
   totalItems: number;
@@ -216,30 +216,30 @@ interface CartState {
   formattedTotal: string;
   isEmpty: boolean;
   hasPartner: boolean;
-  
+
   // Partner Actions
   setSelectedPartner: (partner: SelectedPartner) => void;
   clearSelectedPartner: () => void;
-  
+
   // Warehouse Actions
   setWarehouse: (warehouseId: string, warehouseName: string) => void;
-  
+
   // Cart Item Actions
   addItem: (product: ProductForCart, stocks: CartItemStock[]) => void;
   removeItem: (productId: string) => void;
   updateItemStock: (productId: string, stockTypeId: string, count: number) => void;
   clearCart: () => void;
-  
+
   // Helpers
   getItemByProductId: (productId: string) => CartItem | undefined;
   isInCart: (productId: string) => boolean;
   getItemQuantity: (productId: string) => number;
   getCartItemCount: () => number;
-  
+
   // Validation
   validateCart: () => CartValidation;
   validateMOQ: (productId: string, totalPcs: number, moq: number) => boolean;
-  
+
   // Order Actions
   setDraftOrderUuid: (uuid: string) => void;
   setOrderStatus: (status: CartState['orderStatus']) => void;
@@ -280,7 +280,7 @@ export const useCartStore = create<CartState>()(
       draftOrderUuid: null,
       orderStatus: 'idle',
       orderError: null,
-      
+
       // Computed (recalculated on rehydration)
       itemCount: 0,
       totalItems: 0,
@@ -288,11 +288,11 @@ export const useCartStore = create<CartState>()(
       formattedTotal: '0₮',
       isEmpty: true,
       hasPartner: false,
-      
+
       // ========================================================================
       // PARTNER ACTIONS
       // ========================================================================
-      
+
       /**
        * setSelectedPartner: Харилцагч сонгох
        * 
@@ -302,7 +302,7 @@ export const useCartStore = create<CartState>()(
        */
       setSelectedPartner: (partner: SelectedPartner) => {
         const current = get().selectedPartner;
-        
+
         // Өөр харилцагч сонговол сагс цэвэрлэх
         if (current && current.id !== partner.id) {
           set({
@@ -317,13 +317,13 @@ export const useCartStore = create<CartState>()(
             orderError: null,
           });
         }
-        
-        set({ 
-          selectedPartner: partner, 
+
+        set({
+          selectedPartner: partner,
           hasPartner: true,
         });
       },
-      
+
       /**
        * clearSelectedPartner: Харилцагч сонголт цэвэрлэх
        * Сагс мөн цэвэрлэгдэнэ
@@ -343,11 +343,11 @@ export const useCartStore = create<CartState>()(
           orderError: null,
         });
       },
-      
+
       // ========================================================================
       // WAREHOUSE ACTIONS
       // ========================================================================
-      
+
       /**
        * setWarehouse: Агуулах тохируулах
        * 
@@ -356,7 +356,7 @@ export const useCartStore = create<CartState>()(
        */
       setWarehouse: (warehouseId: string, warehouseName: string) => {
         const current = get().warehouseId;
-        
+
         // Өөр агуулах сонговол сагс цэвэрлэх
         if (current && current !== warehouseId) {
           set({
@@ -370,14 +370,14 @@ export const useCartStore = create<CartState>()(
             orderStatus: 'idle',
           });
         }
-        
+
         set({ warehouseId, warehouseName });
       },
-      
+
       // ========================================================================
       // CART ITEM ACTIONS
       // ========================================================================
-      
+
       /**
        * addItem: Бараа сагсанд нэмэх
        * 
@@ -393,39 +393,40 @@ export const useCartStore = create<CartState>()(
           console.warn('[Cart] Cannot add item without selected partner');
           return;
         }
-        
+
         if (product.stock <= 0) {
           console.warn('[Cart] Cannot add out of stock product');
           return;
         }
-        
+
         set((state) => {
           // Бараа аль хэдийн сагсанд байгаа эсэх
           const existingIndex = state.items.findIndex((item) => item.productId === product.id);
-          
+
           if (existingIndex >= 0) {
             // Аль хэдийн байвал stocks-г шинэчлэнэ
             const newItems = [...state.items];
             const existingItem = newItems[existingIndex];
-            
+
             const updatedBaseItem = {
               ...existingItem,
               stocks,
             };
             const totals = calculateItemTotals(updatedBaseItem);
             newItems[existingIndex] = { ...updatedBaseItem, ...totals };
-            
+
             return {
               items: newItems,
               ...calculateCartTotals(newItems),
             };
           }
-          
+
           // Шинэ бараа нэмэх
-          const availableStockTypes = product.onlyBoxSale 
-            ? product.stockTypes.filter(st => st.name === 'BOX' || st.pcs >= 12)
-            : product.stockTypes;
-          
+          const productStockTypes = product.stockTypes || [];
+          const availableStockTypes = product.onlyBoxSale
+            ? productStockTypes.filter(st => st.name === 'BOX' || st.pcs >= 12)
+            : productStockTypes;
+
           const baseItem = {
             id: `cart-${product.id}-${Date.now()}`,
             productId: product.id,
@@ -435,11 +436,13 @@ export const useCartStore = create<CartState>()(
             formattedPrice: formatPrice(product.price),
             imageUrl: product.image,
             category: null,
-            stockTypes: availableStockTypes.map(st => ({
-              uuid: st.uuid,
-              name: st.name,
-              pcs: st.pcs,
-            })),
+            stockTypes: availableStockTypes.length > 0
+              ? availableStockTypes.map(st => ({
+                uuid: st.uuid,
+                name: st.name,
+                pcs: st.pcs,
+              }))
+              : [{ uuid: 'default', name: 'PCS', pcs: 1 }],
             stocks,
             onlyBoxSale: product.onlyBoxSale,
             moq: product.moq,
@@ -447,18 +450,18 @@ export const useCartStore = create<CartState>()(
             promoPoint: product.promoPoint,
             addedAt: new Date().toISOString(),
           };
-          
+
           const totals = calculateItemTotals(baseItem);
           const newItem: CartItem = { ...baseItem, ...totals };
           const newItems = [...state.items, newItem];
-          
+
           return {
             items: newItems,
             ...calculateCartTotals(newItems),
           };
         });
       },
-      
+
       /**
        * removeItem: Бараа сагснаас хасах
        */
@@ -471,7 +474,7 @@ export const useCartStore = create<CartState>()(
           };
         });
       },
-      
+
       /**
        * updateItemStock: Барааны тоо хэмжээ шинэчлэх
        * 
@@ -485,19 +488,19 @@ export const useCartStore = create<CartState>()(
         set((state) => {
           const itemIndex = state.items.findIndex((item) => item.productId === productId);
           if (itemIndex === -1) return state;
-          
+
           const item = state.items[itemIndex];
           const stockType = item.stockTypes.find(st => st.uuid === stockTypeId);
           if (!stockType) return state;
-          
+
           let newStocks: CartItemStock[];
-          
+
           if (count <= 0) {
             // Устгах
             newStocks = item.stocks.filter(s => s.typeId !== stockTypeId);
           } else {
             const existingStockIndex = item.stocks.findIndex(s => s.typeId === stockTypeId);
-            
+
             if (existingStockIndex >= 0) {
               // Шинэчлэх
               newStocks = [...item.stocks];
@@ -517,7 +520,7 @@ export const useCartStore = create<CartState>()(
               }];
             }
           }
-          
+
           // Бүх stocks хоосон бол бараа устгах
           if (newStocks.length === 0) {
             const newItems = state.items.filter((_, i) => i !== itemIndex);
@@ -526,22 +529,22 @@ export const useCartStore = create<CartState>()(
               ...calculateCartTotals(newItems),
             };
           }
-          
+
           // Барааг шинэчлэх
           const updatedItem = { ...item, stocks: newStocks };
           const totals = calculateItemTotals(updatedItem);
           const finalItem: CartItem = { ...updatedItem, ...totals };
-          
+
           const newItems = [...state.items];
           newItems[itemIndex] = finalItem;
-          
+
           return {
             items: newItems,
             ...calculateCartTotals(newItems),
           };
         });
       },
-      
+
       /**
        * clearCart: Сагс цэвэрлэх
        */
@@ -558,32 +561,32 @@ export const useCartStore = create<CartState>()(
           orderError: null,
         });
       },
-      
+
       // ========================================================================
       // HELPERS
       // ========================================================================
-      
+
       getItemByProductId: (productId: string) => {
         return get().items.find((item) => item.productId === productId);
       },
-      
+
       isInCart: (productId: string) => {
         return get().items.some((item) => item.productId === productId);
       },
-      
+
       getItemQuantity: (productId: string) => {
         const item = get().getItemByProductId(productId);
         return item?.totalQuantity || 0;
       },
-      
+
       getCartItemCount: () => {
         return get().items.length;
       },
-      
+
       // ========================================================================
       // VALIDATION
       // ========================================================================
-      
+
       /**
        * validateCart: Сагсыг checkout-н өмнө шалгах
        * 
@@ -597,62 +600,62 @@ export const useCartStore = create<CartState>()(
         const { items, selectedPartner } = get();
         const errors: string[] = [];
         const warnings: string[] = [];
-        
+
         if (!selectedPartner) {
           errors.push('Харилцагч сонгоогүй байна');
         }
-        
+
         if (items.length === 0) {
           errors.push('Сагс хоосон байна');
         }
-        
+
         items.forEach((item) => {
           // MOQ шалгалт
           if (item.totalQuantity < item.moq) {
             errors.push(`"${item.name}" барааны хамгийн бага захиалга ${item.moq} ширхэг`);
           }
-          
+
           // Stock шалгалт
           if (item.totalQuantity > item.maxQuantity) {
             errors.push(`"${item.name}" барааны үлдэгдэл хүрэлцэхгүй байна`);
           }
-          
+
           // Low stock warning
           if (item.maxQuantity <= 5) {
             warnings.push(`"${item.name}" барааны үлдэгдэл цөөн байна (${item.maxQuantity})`);
           }
         });
-        
+
         return {
           isValid: errors.length === 0,
           errors,
           warnings,
         };
       },
-      
+
       /**
        * validateMOQ: MOQ шалгалт
        */
       validateMOQ: (productId: string, totalPcs: number, moq: number) => {
         return totalPcs >= moq;
       },
-      
+
       // ========================================================================
       // ORDER ACTIONS
       // ========================================================================
-      
+
       setDraftOrderUuid: (uuid: string) => {
         set({ draftOrderUuid: uuid, orderStatus: 'draft' });
       },
-      
+
       setOrderStatus: (status: CartState['orderStatus']) => {
         set({ orderStatus: status });
       },
-      
+
       setOrderError: (error: string | null) => {
         set({ orderError: error, orderStatus: error ? 'error' : get().orderStatus });
       },
-      
+
       resetOrder: () => {
         set({
           draftOrderUuid: null,

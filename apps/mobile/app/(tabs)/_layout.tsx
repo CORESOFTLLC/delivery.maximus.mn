@@ -43,8 +43,8 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
       'Та системээс гарахдаа итгэлтэй байна уу?',
       [
         { text: 'Болих', style: 'cancel' },
-        { 
-          text: 'Гарах', 
+        {
+          text: 'Гарах',
           style: 'destructive',
           onPress: () => {
             logout();
@@ -102,8 +102,8 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
         {/* Menu Items */}
         <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
           {menuItems.map((item, index) => (
-            <TouchableOpacity 
-              key={index} 
+            <TouchableOpacity
+              key={index}
               style={styles.menuItem}
               onPress={() => handleMenuPress(item.route)}
               activeOpacity={0.7}
@@ -134,7 +134,7 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
           </View>
 
           {/* Logout Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.logoutButton}
             onPress={handleLogout}
             activeOpacity={0.8}
@@ -167,7 +167,7 @@ export default function TabsLayout() {
           headerStyle: styles.header,
           headerTitleStyle: styles.headerTitle,
           headerLeft: () => (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.headerMenuButton}
               onPress={() => setDrawerOpen(true)}
             >
@@ -217,6 +217,14 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="products"
+          options={{
+            href: null,
+            title: 'Бүтээгдэхүүн',
+            headerTitle: 'Бүтээгдэхүүн',
+          }}
+        />
+        <Tabs.Screen
           name="work"
           options={{
             href: null,
@@ -233,7 +241,7 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
-      
+
       <DrawerMenu isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   );
