@@ -40,7 +40,7 @@ import type { Partner, PartnerTabType } from '../../../types/partner';
  * 1. coordinateRange === 1 → "Ирсэн" (GPS шалгахгүй)
  * 2. coordinateRange !== 1 → GPS зайг routeRange-тэй харьцуулах
  */
-function PartnerCard({ partner, onPress, routeRangeKm }: { partner: Partner; onPress: () => void; routeRangeKm: number }) {
+function PartnerCard({ partner, onPress, routeRangeKm, index }: { partner: Partner; onPress: () => void; routeRangeKm: number; index: number }) {
   const isCoordinateFree = partner.coordinateRange === 1;
   const isNearby = isCoordinateFree || (partner.distance !== undefined && partner.distance <= routeRangeKm);
   const distanceLabel = isCoordinateFree ? 'Ирсэн' : (isNearby ? 'Ойрхон' : 'Зай хол');
@@ -61,10 +61,26 @@ function PartnerCard({ partner, onPress, routeRangeKm }: { partner: Partner; onP
   return (
     <Pressable onPress={onPress}>
       <Box className="bg-white border-b border-outline-100" style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-        {/* Row 1: Status badge + Partner name + Code + Image */}
+        {/* Row 1: Index + Status badge + Partner name + Code + Image */}
         <HStack className="items-start justify-between" style={{ marginBottom: 8 }}>
+          {/* Index Number */}
+          <Box style={{ 
+            width: 28, 
+            height: 28, 
+            borderRadius: 14, 
+            backgroundColor: '#FEF3C7',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 10,
+            marginTop: 2,
+          }}>
+            <Text style={{ fontSize: 12, fontFamily: 'GIP-Bold', color: '#D97706' }}>
+              {index}
+            </Text>
+          </Box>
+          
           <VStack className="flex-1" style={{ marginRight: 12 }}>
-            {/* Status Badge */}
+            {/* Status Badge */}}
             <Box 
               style={{ 
                 paddingHorizontal: 8, 
@@ -404,11 +420,12 @@ export default function RoutePartnersScreen() {
               )}
             </HStack>
           }
-          renderItem={({ item: partner }) => (
+          renderItem={({ item: partner, index }) => (
             <PartnerCard
               partner={partner}
               routeRangeKm={routeRangeKm}
               onPress={() => handlePartnerPress(partner)}
+              index={index + 1}
             />
           )}
           ListEmptyComponent={

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { KeyboardAvoidingView, Platform, Image, View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, Image, View, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, User, Lock, AlertCircle, Smartphone } from 'lucide-react-native';
+import { Eye, EyeOff, User, Lock, AlertCircle, Smartphone, Copy } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { useAuthStore } from '../stores/auth-store';
 import { 
@@ -212,12 +213,21 @@ export default function LoginScreen() {
 
               {/* Footer */}
               <VStack space="xs" className="mt-8 items-center">
-                <HStack space="xs" className="items-center">
-                  <Icon as={Smartphone} size="xs" className="text-typography-400" />
-                  <Text size="xs" className="text-typography-400">
-                    Device ID: {deviceId}
-                  </Text>
-                </HStack>
+                <TouchableOpacity 
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(deviceId);
+                    Alert.alert('Хуулагдлаа', 'Device ID хуулагдлаа');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <HStack space="xs" className="items-center">
+                    <Icon as={Smartphone} size="xs" className="text-typography-400" />
+                    <Text size="xs" className="text-typography-400">
+                      Device ID: {deviceId}
+                    </Text>
+                    <Icon as={Copy} size="xs" className="text-typography-400" />
+                  </HStack>
+                </TouchableOpacity>
                 <Text size="xs" className="text-typography-400">
                   App Version: 2.0.1
                 </Text>

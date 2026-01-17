@@ -9,6 +9,30 @@
  * - Search барааны нэр, код-р
  * - Infinite scroll pagination
  * - Brand/Category шүүлтүүр
+ * - NumberPad тоо оруулах
+ * - StockType сонголт (PCS, PACK, BOX)
+ * - MOQ шалгалт
+ * - Сагсанд нэмэх
+ * 
+ * ============================================================================
+ * БИЗНЕС ЛОГИК
+ * ============================================================================
+ * 
+ * 1. STOCKTYPES
+ *    - API-с stockTypes массив ирнэ: [{ uuid, name, pcs }]
+ *    - PCS = 1 ширхэг, PACK = N ширхэг, BOX = M ширхэг
+ *    - onlyBoxSale = true бол зөвхөн BOX сонголт
+ * 
+ * 2. MOQ (Minimum Order Quantity)
+ *    - Нийт PCS >= MOQ байх ёстой
+ *    - MOQ хангаагүй бол сагсанд нэмэхгүй
+ * 
+ * 3. САГСАНД НЭМЭХ
+ *    - NumberPad дээр тоо оруулж confirm хийнэ
+ *    - Харилцагч сонгоогүй бол анхааруулга
+ *    - Агуулах солигдоход prices өөрчлөгдөнө
+ * 
+ * ============================================================================
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -25,6 +49,7 @@ import {
   Modal,
   ScrollView,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,17 +66,39 @@ import {
   ShoppingCart,
   Check,
   ChevronDown,
+  User,
 } from 'lucide-react-native';
 import { Box, HStack, VStack, Text, Heading } from '../../components/ui';
 import { useAuthStore } from '../../stores/auth-store';
+import { useCartStore, type ProductForCart, type CartItemStock } from '../../stores/cart-store';
+import { useWarehouseStore } from '../../stores/warehouse-store';
 import { getProducts, type Product, type Category, type Brand } from '../../services/api';
+import { NumberPad } from '../../components/NumberPad';
 
 const { width } = Dimensions.get('window');
 const GRID_ITEM_WIDTH = (width - 24) / 2; // 2 columns with 8px padding each side + 8px gap
 
+// Stock тоог format хийх - 5000+ гэх мэт
+const formatStock = (stock: number): string => {
+  if (stock >= 5000) return '5000+';
+  return stock.toLocaleString();
+};
+
 export default function ProductsScreen() {
   const router = useRouter();
   const { erpDetails } = useAuthStore();
+  
+  // Cart Store
+  const {
+    selectedPartner,
+    items: cartItems,
+    addItem,
+    getItemQuantity,
+    getCartItemCount,
+  } = useCartStore();
+  
+  // Warehouse Store
+  const { selectedWarehouse, getSelectedPriceTypeId } = useWarehouseStore();
   
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,13 +120,18 @@ export default function ProductsScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
+  
+  // NumberPad States
+  const [showNumberPad, setShowNumberPad] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const PAGE_SIZE = 20;
+  const cartItemCount = getCartItemCount();
 
-  // Get warehouse and route info from erpDetails
-  const warehouseId = erpDetails?.[0]?.warehouses?.[0]?.uuid || '';
+  // Get warehouse and route info from erpDetails or selected warehouse
+  const warehouseId = selectedWarehouse?.uuid || erpDetails?.[0]?.warehouses?.[0]?.uuid || '';
   const routeId = erpDetails?.[0]?.routeId || '';
-  const priceTypeId = erpDetails?.[0]?.warehouses?.[0]?.priceTypeId || '';
+  const priceTypeId = getSelectedPriceTypeId() || erpDetails?.[0]?.warehouses?.[0]?.priceTypeId || '';
 
   // Extract unique categories and brands from all products
   const fetchFiltersFromProducts = useCallback(async () => {
@@ -247,94 +299,258 @@ export default function ProductsScreen() {
 
   const activeFiltersCount = selectedCategories.length + selectedBrands.length;
 
-  const formatPrice = (price: number | undefined | null) => {
+  // ============================================================================
+  // ХЯМДРАЛТАЙ ҮНЭ ТООЦООЛОХ (isSale = true үед 50% хямдрал)
+  // ============================================================================
+  
+  /**
+   * isSaleWarehouse: Сонгосон агуулах хямдралтай эсэх
+   * isSale = true үед бүх барааны үнэ 50% хямдарна
+   */
+  const isSaleWarehouse = selectedWarehouse?.isSale || false;
+  
+  /**
+   * getDiscountedPrice: Хямдралтай үнэ тооцоолох
+   * @param originalPrice - Үндсэн үнэ
+   * @returns Хямдралтай үнэ (isSale = true бол 50% хямдрал)
+   */
+  const getDiscountedPrice = useCallback((originalPrice: number | undefined | null): number => {
+    if (originalPrice == null) return 0;
+    if (isSaleWarehouse) {
+      return Math.round(originalPrice * 0.5); // 50% хямдрал
+    }
+    return originalPrice;
+  }, [isSaleWarehouse]);
+  
+  /**
+   * formatPrice: Үнэ форматлах (зөвхөн хямдралтай үнэ буцаана)
+   */
+  const formatPrice = (price: number | undefined | null): string => {
     if (price == null) return '₮0';
-    return `₮${price.toLocaleString()}`;
+    const discountedPrice = getDiscountedPrice(price);
+    return `₮${discountedPrice.toLocaleString()}`;
   };
 
-  const renderGridItem = ({ item }: { item: Product }) => (
-    <TouchableOpacity style={styles.gridItem} activeOpacity={0.7}>
-      {/* Product Image with Stock Badge */}
-      <View style={styles.gridImageContainer}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
-        ) : (
-          <Package size={36} color="#D1D5DB" />
-        )}
-        
-        {/* Stock Badge - Top Right */}
-        <View style={styles.gridStockBadge}>
-          <Text style={styles.gridStockText}>{item.stock || 0}</Text>
-        </View>
-        
-        {/* Brand Badge - Top Left */}
-        {item.brand?.name && (
-          <View style={styles.gridBrandBadge}>
-            <Text style={styles.gridBrandText} numberOfLines={1}>{item.brand.name}</Text>
-          </View>
-        )}
-      </View>
-      
-      {/* Product Info */}
-      <View style={styles.gridInfo}>
-        {/* Product Code */}
-        <Text style={styles.gridProductCode}>{item.code}</Text>
-        
-        {/* Product Name */}
-        <Text style={styles.gridProductName} numberOfLines={2}>{item.name}</Text>
-        
-        {/* Price Row */}
-        <View style={styles.gridPriceRow}>
-          <Text style={styles.gridPrice}>{formatPrice(item.price)}</Text>
-          
-          {/* Add to Cart Button */}
-          <TouchableOpacity style={styles.gridAddButton} activeOpacity={0.8}>
-            <ShoppingCart size={14} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  // ============================================================================
+  // БАРАА САГСАНД НЭМЭХ HANDLERS
+  // ============================================================================
+  
+  /**
+   * handleProductPress: Бараа дээр дарсан үед NumberPad нээх
+   */
+  const handleProductPress = useCallback((product: Product) => {
+    // Харилцагч сонгоогүй бол анхааруулга
+    if (!selectedPartner) {
+      Alert.alert(
+        'Харилцагч сонгоно уу',
+        'Бараа сагсалахын өмнө харилцагч сонгох шаардлагатай.',
+        [
+          { text: 'Болих', style: 'cancel' },
+          { 
+            text: 'Харилцагч сонгох', 
+            onPress: () => router.push('/partners'),
+          },
+        ]
+      );
+      return;
+    }
+    
+    setSelectedProduct(product);
+    setShowNumberPad(true);
+  }, [selectedPartner, router]);
+  
+  /**
+   * handleAddToCart: NumberPad-с confirm хийсэн үед
+   */
+  const handleAddToCart = useCallback((product: ProductForCart, stocks: CartItemStock[]) => {
+    addItem(product, stocks);
+    
+    // Амжилттай нэмсэн мессеж
+    // Alert биш toast ашиглах нь дээр, одоогоор Alert
+    // Toast component нэмж болно
+  }, [addItem]);
+  
+  /**
+   * getProductCartQuantity: Бараа сагсанд хэдэн ширхэг байгааг авах
+   */
+  const getProductCartQuantity = useCallback((productId: string) => {
+    return getItemQuantity(productId);
+  }, [getItemQuantity]);
 
-  const renderListItem = ({ item }: { item: Product }) => (
-    <TouchableOpacity style={styles.listItem} activeOpacity={0.7}>
-      {/* Product Image */}
-      <View style={styles.listImageContainer}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.listImage} resizeMode="cover" />
-        ) : (
-          <Package size={28} color="#9CA3AF" />
-        )}
-      </View>
-      
-      {/* Product Info */}
-      <VStack style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.listProductName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.listProductCode}>{item.code}</Text>
-        
-        <HStack style={{ alignItems: 'center', gap: 8, marginTop: 4 }}>
+
+  const renderGridItem = ({ item, index }: { item: Product; index: number }) => {
+    const cartQty = getProductCartQuantity(item.uuid);
+    const isInCart = cartQty > 0;
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.gridItem, isInCart && styles.gridItemInCart]} 
+        activeOpacity={0.7}
+        onPress={() => handleProductPress(item)}
+      >
+        {/* Product Image with Stock Badge */}
+        <View style={styles.gridImageContainer}>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.gridImage} resizeMode="cover" />
+          ) : (
+            <Package size={36} color="#D1D5DB" />
+          )}
+          
+          {/* Stock Badge - Top Right */}
+          <View style={styles.gridStockBadge}>
+            <Text style={styles.gridStockText}>{formatStock(item.stock || 0)}</Text>
+          </View>
+          
+          {/* Brand Badge - Top Left */}
           {item.brand?.name && (
-            <View style={styles.brandBadgeSmall}>
-              <Text style={styles.brandTextSmall}>{item.brand.name}</Text>
+            <View style={styles.gridBrandBadge}>
+              <Text style={styles.gridBrandText} numberOfLines={1}>{item.brand.name}</Text>
             </View>
           )}
-          {item.category?.name && (
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{item.category.name}</Text>
+          
+          {/* Cart Quantity Badge - Bottom Right */}
+          {isInCart && (
+            <View style={styles.gridCartBadge}>
+              <Text style={styles.gridCartBadgeText}>{cartQty}</Text>
             </View>
           )}
-        </HStack>
-      </VStack>
-      
-      {/* Price & Stock */}
-      <VStack style={{ alignItems: 'flex-end', gap: 4 }}>
-        <Text style={styles.listPrice}>{formatPrice(item.price)}</Text>
-        <View style={styles.stockBadgeSmall}>
-          <Text style={styles.stockTextSmall}>{item.stock || 0} ш</Text>
         </View>
-      </VStack>
-    </TouchableOpacity>
-  );
+        
+        {/* Product Info */}
+        <View style={styles.gridInfo}>
+          {/* Product Code */}
+          <Text style={styles.gridProductCode}>{item.code}</Text>
+          
+          {/* Product Name with Index */}
+          <Text style={styles.gridProductName} numberOfLines={2}>
+            <Text style={styles.gridIndexText}>{index + 1}. </Text>{item.name}
+          </Text>
+          
+          {/* MOQ indicator */}
+          {item.moq > 1 && (
+            <Text style={styles.gridMoqText}>MOQ: {item.moq}</Text>
+          )}
+          
+          {/* Price Row - 50% хямдралтай үнэ isSale үед */}
+          <View style={styles.gridPriceRow}>
+            <View style={{ flex: 1 }}>
+              {isSaleWarehouse && (
+                <Text style={styles.gridPriceOriginal}>₮{item.price?.toLocaleString()}</Text>
+              )}
+              <Text style={[styles.gridPrice, isSaleWarehouse && styles.gridPriceDiscounted]}>
+                {formatPrice(item.price)}
+              </Text>
+            </View>
+            
+            {/* Add to Cart Button */}
+            <TouchableOpacity 
+              style={[styles.gridAddButton, isInCart && styles.gridAddButtonInCart]} 
+              activeOpacity={0.8}
+              onPress={() => handleProductPress(item)}
+            >
+              {isInCart ? (
+                <Check size={14} color="#FFFFFF" />
+              ) : (
+                <Plus size={14} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          {/* Sale Badge */}
+          {isSaleWarehouse && (
+            <View style={styles.saleBadge}>
+              <Text style={styles.saleBadgeText}>-50%</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderListItem = ({ item, index }: { item: Product; index: number }) => {
+    const cartQty = getProductCartQuantity(item.uuid);
+    const isInCart = cartQty > 0;
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.listItem, isInCart && styles.listItemInCart]} 
+        activeOpacity={0.7}
+        onPress={() => handleProductPress(item)}
+      >
+        {/* Product Image */}
+        <View style={styles.listImageContainer}>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.listImage} resizeMode="cover" />
+          ) : (
+            <Package size={28} color="#9CA3AF" />
+          )}
+          {/* Cart indicator on image */}
+          {isInCart && (
+            <View style={styles.listCartBadge}>
+              <Text style={styles.listCartBadgeText}>{cartQty}</Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Product Info */}
+        <VStack style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.listProductName} numberOfLines={2}>
+            <Text style={styles.listIndexText}>{index + 1}. </Text>{item.name}
+          </Text>
+          <Text style={styles.listProductCode}>{item.code}</Text>
+          
+          <HStack style={{ alignItems: 'center', gap: 8, marginTop: 4 }}>
+            {item.brand?.name && (
+              <View style={styles.brandBadgeSmall}>
+                <Text style={styles.brandTextSmall}>{item.brand.name}</Text>
+              </View>
+            )}
+            {item.category?.name && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{item.category.name}</Text>
+              </View>
+            )}
+            {item.moq > 1 && (
+              <View style={styles.moqBadge}>
+                <Text style={styles.moqBadgeText}>MOQ:{item.moq}</Text>
+              </View>
+            )}
+            {/* Sale Badge for list view */}
+            {isSaleWarehouse && (
+              <View style={styles.saleBadgeSmall}>
+                <Text style={styles.saleBadgeSmallText}>-50%</Text>
+              </View>
+            )}
+          </HStack>
+        </VStack>
+        
+        {/* Price & Stock */}
+        <VStack style={{ alignItems: 'flex-end', gap: 4 }}>
+          {/* Price with discount indicator */}
+          {isSaleWarehouse && (
+            <Text style={styles.listPriceOriginal}>₮{item.price?.toLocaleString()}</Text>
+          )}
+          <Text style={[styles.listPrice, isSaleWarehouse && styles.listPriceDiscounted]}>
+            {formatPrice(item.price)}
+          </Text>
+          <View style={styles.stockBadgeSmall}>
+            <Text style={styles.stockTextSmall}>{formatStock(item.stock || 0)} ш</Text>
+          </View>
+          {/* Add button */}
+          <TouchableOpacity 
+            style={[styles.listAddButton, isInCart && styles.listAddButtonInCart]}
+            onPress={() => handleProductPress(item)}
+          >
+            {isInCart ? (
+              <Check size={16} color="#FFFFFF" />
+            ) : (
+              <Plus size={16} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        </VStack>
+      </TouchableOpacity>
+    );
+  };
 
   const renderFooter = () => {
     if (!isLoadingMore) return null;
@@ -369,8 +585,39 @@ export default function ProductsScreen() {
           >
             <List size={18} color={viewMode === 'list' ? '#FFFFFF' : '#6B7280'} />
           </TouchableOpacity>
+          {/* Cart Button */}
+          <TouchableOpacity 
+            style={styles.cartButton}
+            onPress={() => router.push('/cart')}
+          >
+            <ShoppingCart size={20} color="#2563EB" />
+            {cartItemCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </HStack>
       </View>
+      
+      {/* Selected Partner Info Bar */}
+      {selectedPartner && (
+        <TouchableOpacity 
+          style={styles.partnerBar}
+          onPress={() => router.push(`/partner/${selectedPartner.id}`)}
+        >
+          <User size={16} color="#2563EB" />
+          <Text style={styles.partnerBarText} numberOfLines={1}>
+            {selectedPartner.name}
+          </Text>
+          {cartItemCount > 0 && (
+            <View style={styles.partnerCartInfo}>
+              <ShoppingCart size={12} color="#059669" />
+              <Text style={styles.partnerCartText}>{cartItemCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -616,6 +863,27 @@ export default function ProductsScreen() {
           ListFooterComponent={renderFooter}
         />
       )}
+      
+      {/* NumberPad Modal */}
+      <NumberPad
+        visible={showNumberPad}
+        onClose={() => {
+          setShowNumberPad(false);
+          setSelectedProduct(null);
+        }}
+        product={selectedProduct}
+        onAddToCart={handleAddToCart}
+        currentStocks={
+          selectedProduct 
+            ? cartItems.find(i => i.productId === selectedProduct.uuid)?.stocks 
+            : undefined
+        }
+        discountedPrice={
+          selectedProduct && isSaleWarehouse 
+            ? getDiscountedPrice(selectedProduct.price) 
+            : undefined
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -661,6 +929,62 @@ const styles = StyleSheet.create({
   viewModeButtonActive: {
     backgroundColor: '#2563EB',
     borderColor: '#2563EB',
+  },
+  // Cart button in header
+  cartButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    position: 'relative',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
+  },
+  // Partner info bar
+  partnerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  partnerBarText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'GIP-Medium',
+    color: '#2563EB',
+  },
+  partnerCartInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  partnerCartText: {
+    fontSize: 11,
+    fontFamily: 'GIP-Bold',
+    color: '#059669',
   },
   searchContainer: {
     padding: 12,
@@ -1021,6 +1345,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  gridIndexText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Bold',
+    color: '#2563EB',
+  },
   gridImageContainer: {
     width: '100%',
     height: GRID_ITEM_WIDTH * 0.7,
@@ -1099,6 +1428,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  gridAddButtonInCart: {
+    backgroundColor: '#059669',
+  },
+  gridItemInCart: {
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  gridCartBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  gridCartBadgeText: {
+    fontSize: 11,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
+  },
+  gridMoqText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Medium',
+    color: '#F59E0B',
+    marginTop: 2,
+  },
   stockBadge: {
     backgroundColor: '#EFF6FF',
     paddingHorizontal: 6,
@@ -1137,6 +1496,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     gap: 12,
+  },
+  listItemInCart: {
+    borderColor: '#10B981',
+    borderWidth: 2,
+    backgroundColor: '#F0FDF4',
+  },
+  listCartBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  listCartBadgeText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
+  },
+  listAddButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  listAddButtonInCart: {
+    backgroundColor: '#059669',
+  },
+  moqBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  moqBadgeText: {
+    fontSize: 9,
+    fontFamily: 'GIP-Medium',
+    color: '#D97706',
+  },
+  listIndexText: {
+    fontSize: 13,
+    fontFamily: 'GIP-Bold',
+    color: '#2563EB',
   },
   listImageContainer: {
     width: 56,
@@ -1203,5 +1612,51 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  // ============================================================================
+  // ХЯМДРАЛТАЙ ҮНЭ STYLES (isSale = true, 50% хямдрал)
+  // ============================================================================
+  gridPriceOriginal: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+  },
+  gridPriceDiscounted: {
+    color: '#DC2626', // Улаан өнгө - хямдралтай үнэ
+  },
+  listPriceOriginal: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+  },
+  listPriceDiscounted: {
+    color: '#DC2626', // Улаан өнгө - хямдралтай үнэ
+  },
+  saleBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  saleBadgeText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
+  },
+  saleBadgeSmall: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  saleBadgeSmallText: {
+    fontSize: 9,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
   },
 });

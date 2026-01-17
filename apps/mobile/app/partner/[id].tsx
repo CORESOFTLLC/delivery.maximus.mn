@@ -6,6 +6,24 @@
  * - Компанийн мэдээлэл карт
  * - Ангилал badge
  * 
+ * ============================================================================
+ * БИЗНЕС ЛОГИК
+ * ============================================================================
+ * 
+ * 1. ЗАХИАЛГА ҮҮСГЭХ ТОВЧ
+ *    - coordinateRange = 1 үед GPS шалгахгүй, шууд идэвхжинэ
+ *    - coordinateRange != 1 үед routeRange дотор байвал идэвхжинэ
+ *    - Товч дарахад: selectedPartner тохируулж, products руу шилжинэ
+ * 
+ * 2. ЗОЧИЛСОН ТОВЧ
+ *    - Coordinate range дотор байвал идэвхжинэ
+ *    - Дарахад зочилсон гэж тэмдэглэнэ
+ * 
+ * 3. ХАРИЛЦАГЧ СОЛИХ
+ *    - Өөр харилцагч сонгоход сагс цэвэрлэгдэнэ (анхааруулга)
+ * 
+ * ============================================================================
+ * 
  * API: /hs/cd/Companies/{companyId}?routeId={routeId}
  */
 
@@ -18,7 +36,7 @@ import {
   Wallet, Clock, CreditCard, FileText, ShoppingCart, AlertCircle,
   Calendar, Hash, Route, ChevronRight, TrendingUp, Edit3,
   Package, ClipboardList, Layout, Home, ImageIcon, Landmark, Truck,
-  Trash2, Gift
+  Trash2, Gift, CheckCircle, XCircle
 } from 'lucide-react-native';
 import { 
   Box, VStack, HStack, Text, Heading, Pressable, 
@@ -26,6 +44,8 @@ import {
 } from '../../components/ui';
 import { usePartnerStore } from '../../stores/partner-store';
 import { useAuthStore } from '../../stores/auth-store';
+import { useCartStore, type SelectedPartner } from '../../stores/cart-store';
+import { useWarehouseStore } from '../../stores/warehouse-store';
 import { getPartnerDetail, getOrders, type PartnerDetail, type Order } from '../../services/api';
 import { What3WordsIcon } from '../../components/icons/What3WordsIcon';
 
@@ -56,11 +76,50 @@ export default function PartnerDetailScreen() {
   const { selectedPartner } = usePartnerStore();
   const { erpDetails, user } = useAuthStore();
   
+  // Cart store - харилцагч сонгох
+  const { 
+    selectedPartner: cartPartner, 
+    setSelectedPartner: setCartPartner,
+    hasPartner: hasCartPartner,
+    itemCount: cartItemCount,
+  } = useCartStore();
+  
+  // Warehouse store - routeRange авах
+  const { getRouteRange } = useWarehouseStore();
+  
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [partnerDetail, setPartnerDetail] = useState<PartnerDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  
+  // ============================================================================
+  // БИЗНЕС ЛОГИК: Coordinate Range шалгалт
+  // ============================================================================
+  /**
+   * isWithinRange: Харилцагчийн байршилд хүрсэн эсэх
+   * 
+   * БИЗНЕС ЛОГИК:
+   * - coordinateRange = 1 → GPS шалгахгүй, шууд true
+   * - coordinateRange != 1 → routeRange (метр) дотор байвал true
+   */
+  const isWithinRange = (): boolean => {
+    // coordinateRange = 1 бол GPS шалгахгүй
+    if (partnerDetail?.coordinateRange === 1) {
+      return true;
+    }
+    
+    // GPS-р шалгах
+    if (!userLocation || !partnerDetail?.latitude || !partnerDetail?.longitude) {
+      return false;
+    }
+    
+    const routeRange = getRouteRange(); // метрээр (default: 2000)
+    const distanceInMeters = (distance || 0) * 1000; // км → метр
+    
+    return distanceInMeters <= routeRange;
+  };
   
   // Orders tab state
   const [ordersTab, setOrdersTab] = useState<'active' | 'history'>('active');
@@ -105,6 +164,13 @@ export default function PartnerDetailScreen() {
             const location = await Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Balanced,
             });
+            
+            // Хэрэглэгчийн байршил хадгалах
+            setUserLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+            
             const dist = calculateDistance(
               location.coords.latitude,
               location.coords.longitude,
@@ -214,6 +280,104 @@ export default function PartnerDetailScreen() {
   const formatBalance = (balance?: number | null) => {
     if (!balance) return '0₮';
     return balance.toLocaleString() + '₮';
+  };
+
+  // ============================================================================
+  // БИЗНЕС ЛОГИК: Захиалга үүсгэх
+  // ============================================================================
+  /**
+   * handleCreateOrder: "Захиалга үүсгэх" товч дарсан үед
+   * 
+   * БИЗНЕС ЛОГИК:
+   * 1. Coordinate range шалгах (coordinateRange=1 бол шалгахгүй)
+   * 2. Өөр харилцагч сонгосон бол сагс цэвэрлэх анхааруулга
+   * 3. selectedPartner тохируулж products руу шилжих
+   */
+  const handleCreateOrder = () => {
+    if (!partnerDetail) return;
+    
+    // Range шалгалт
+    if (!isWithinRange()) {
+      Alert.alert(
+        'Зай хол байна',
+        'Та харилцагчийн байршилд хүрээгүй байна. Ойртсоны дараа захиалга үүсгэнэ үү.',
+        [{ text: 'Ойлголоо' }]
+      );
+      return;
+    }
+    
+    // Өөр харилцагч сонгоход анхааруулга
+    if (hasCartPartner && cartPartner?.id !== partnerDetail.id && cartItemCount > 0) {
+      Alert.alert(
+        'Харилцагч солих',
+        `Та "${cartPartner?.name}" харилцагчид ${cartItemCount} бараа сагсласан байна.\n\nӨөр харилцагч сонгоход сагс цэвэрлэгдэх болно.`,
+        [
+          { text: 'Үгүй', style: 'cancel' },
+          { 
+            text: 'Тийм, солих', 
+            style: 'destructive',
+            onPress: () => selectPartnerAndNavigate(),
+          },
+        ]
+      );
+      return;
+    }
+    
+    selectPartnerAndNavigate();
+  };
+  
+  /**
+   * selectPartnerAndNavigate: Харилцагч сонгоод products руу шилжих
+   */
+  const selectPartnerAndNavigate = () => {
+    if (!partnerDetail) return;
+    
+    const partner: SelectedPartner = {
+      id: partnerDetail.id,
+      name: partnerDetail.name,
+      phone: partnerDetail.phoneNumbers?.[0] || null,
+      address: partnerDetail.address || null,
+      latitude: partnerDetail.latitude || null,
+      longitude: partnerDetail.longitude || null,
+      coordinateRange: partnerDetail.coordinateRange || null,
+      totalDiscountAmount: partnerDetail.totalDiscountAmount || null,
+    };
+    
+    setCartPartner(partner);
+    router.push('/products');
+  };
+  
+  /**
+   * handleVisit: "Зочилсон" товч дарсан үед
+   * 
+   * БИЗНЕС ЛОГИК:
+   * - Coordinate range дотор байвал зочилсон гэж тэмдэглэнэ
+   */
+  const handleVisit = () => {
+    if (!isWithinRange()) {
+      Alert.alert(
+        'Зай хол байна',
+        'Та харилцагчийн байршилд хүрээгүй байна.',
+        [{ text: 'Ойлголоо' }]
+      );
+      return;
+    }
+    
+    // TODO: Visit API call
+    Alert.alert(
+      'Зочилсон',
+      `"${partnerDetail?.name}" харилцагчид зочилсон гэж тэмдэглэх үү?`,
+      [
+        { text: 'Үгүй', style: 'cancel' },
+        { 
+          text: 'Тийм', 
+          onPress: () => {
+            // TODO: API call to mark visit
+            Alert.alert('Амжилттай', 'Зочилсон гэж тэмдэглэгдлээ');
+          }
+        },
+      ]
+    );
   };
 
   // Loading state
@@ -784,23 +948,79 @@ export default function PartnerDetailScreen() {
 
       {/* Bottom Action Buttons */}
       <Box style={styles.bottomAction}>
-        <Button 
-          size="lg" 
-          variant="outline"
-          className="flex-1 mr-2 border-gray-300"
-          onPress={() => Alert.alert('Зочилсон', 'Зочилсон гэж тэмдэглэх үү?')}
-        >
-          <MapPin size={20} color="#6B7280" />
-          <ButtonText className="ml-2 text-gray-700">Зочилсон</ButtonText>
-        </Button>
-        <Button 
-          size="lg" 
-          className="flex-1 bg-primary-600"
-          onPress={() => Alert.alert('Захиалга', 'Захиалга үүсгэх хэсэг удахгүй')}
-        >
-          <ShoppingCart size={20} color="white" />
-          <ButtonText className="ml-2">Захиалга үүсгэх</ButtonText>
-        </Button>
+        {/* Distance indicator */}
+        {userLocation && partnerDetail.latitude && partnerDetail.longitude && (
+          <Box style={styles.distanceIndicator}>
+            <Navigation size={12} color={isWithinRange() ? '#059669' : '#DC2626'} />
+            <Text style={[
+              styles.distanceText,
+              { color: isWithinRange() ? '#059669' : '#DC2626' }
+            ]}>
+              {(() => {
+                const R = 6371000;
+                const lat1 = userLocation.latitude * Math.PI / 180;
+                const lat2 = partnerDetail.latitude * Math.PI / 180;
+                const dLat = (partnerDetail.latitude - userLocation.latitude) * Math.PI / 180;
+                const dLon = (partnerDetail.longitude - userLocation.longitude) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                          Math.cos(lat1) * Math.cos(lat2) *
+                          Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const d = R * c;
+                return d >= 1000 ? `${(d/1000).toFixed(1)} км` : `${Math.round(d)} м`;
+              })()}
+            </Text>
+            {partnerDetail.coordinateRange !== 1 && (
+              <Text style={styles.rangeText}>
+                / {getRouteRange()}м дотор
+              </Text>
+            )}
+          </Box>
+        )}
+        
+        {/* Cart count indicator */}
+        {cartItemCount > 0 && cartPartner?.id === partnerDetail.id && (
+          <Box style={styles.cartCountIndicator}>
+            <ShoppingCart size={14} color="#2563EB" />
+            <Text style={styles.cartCountText}>{cartItemCount} бараа сагсанд</Text>
+          </Box>
+        )}
+        
+        {/* Action Buttons */}
+        <HStack space="sm" className="w-full">
+          <Button 
+            size="lg" 
+            variant="outline"
+            className="flex-1 border-gray-300"
+            style={[
+              styles.actionButton,
+              !isWithinRange() && styles.actionButtonDisabled
+            ]}
+            onPress={handleVisit}
+            disabled={!isWithinRange()}
+          >
+            <MapPin size={20} color={isWithinRange() ? '#6B7280' : '#D1D5DB'} />
+            <ButtonText className={isWithinRange() ? 'ml-2 text-gray-700' : 'ml-2 text-gray-300'}>
+              Зочилсон
+            </ButtonText>
+          </Button>
+          <Button 
+            size="lg" 
+            className="flex-1"
+            style={[
+              styles.actionButton,
+              styles.primaryButton,
+              !isWithinRange() && styles.primaryButtonDisabled
+            ]}
+            onPress={handleCreateOrder}
+            disabled={!isWithinRange()}
+          >
+            <ShoppingCart size={20} color={isWithinRange() ? 'white' : '#9CA3AF'} />
+            <ButtonText className={isWithinRange() ? 'ml-2 text-white' : 'ml-2 text-gray-400'}>
+              Захиалга үүсгэх
+            </ButtonText>
+          </Button>
+        </HStack>
       </Box>
     </SafeAreaView>
   );
@@ -945,12 +1165,60 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
+    flexDirection: 'column',
     padding: 16,
     paddingBottom: 32,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+  },
+  // Distance and Cart indicators
+  distanceIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  distanceText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    marginLeft: 4,
+  },
+  rangeText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+    marginLeft: 4,
+  },
+  cartCountIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  cartCountText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#2563EB',
+    marginLeft: 6,
+  },
+  // Action buttons
+  actionButton: {
+    height: 48,
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
+    borderColor: '#E5E7EB',
+  },
+  primaryButton: {
+    backgroundColor: '#2563EB',
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#E5E7EB',
   },
   // Orders Tab Styles
   ordersTabBar: {

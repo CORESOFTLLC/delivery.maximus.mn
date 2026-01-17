@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -17,9 +17,12 @@
     "@gluestack-ui/toast": "^1.0.9",
     "@gluestack-ui/utils": "^3.0.15",
     "@legendapp/motion": "^2.5.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "~54.0.31",
     "expo-application": "~7.0.8",
+    "expo-clipboard": "^8.0.8",
     "expo-constants": "~18.0.13",
+    "expo-linear-gradient": "^15.0.8",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
     "expo-router": "~6.0.21",

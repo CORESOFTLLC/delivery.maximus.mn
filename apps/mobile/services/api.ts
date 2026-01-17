@@ -856,6 +856,12 @@ export interface Product {
   unit: { uuid: string; name: string } | null;
   image: string | null;
   isActive: boolean;
+  // StockTypes: PCS, PACK, BOX гэх мэт
+  stockTypes: Array<{ uuid: string; name: string; pcs: number }>;
+  // Зөвхөн хайрцгаар борлуулах эсэх
+  onlyBoxSale: boolean;
+  // Урамшууллын оноо
+  promoPoint: number | null;
 }
 
 interface ProductsResponse {

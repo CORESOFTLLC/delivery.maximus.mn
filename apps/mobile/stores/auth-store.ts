@@ -16,6 +16,7 @@ export interface SalesAppUser {
   account_type: string;
   sub_type: string;
   is_active: boolean;
+  avatar?: string | null;
 }
 
 export interface ErpDetails {
