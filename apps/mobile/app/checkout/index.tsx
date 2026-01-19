@@ -4,26 +4,27 @@
  * Захиалга үүсгэх, ERP руу илгээх flow
  * 
  * ============================================================================
- * БИЗНЕС ЛОГИК: 2-STEP ORDER PROCESS
+ * БИЗНЕС ЛОГИК: 2-STEP ORDER PROCESS (ERP шууд холболт)
  * ============================================================================
  * 
- * STEP 1: DRAFT ҮҮСГЭХ
- * - POST /hs/od/Order
- * - Body: { latitude, longitude, products[], paymentcheck, ... }
- * - Response: { uuid } - Draft захиалгын UUID
+ * ERP STEP 1: DRAFT ҮҮСГЭХ
+ * - POST http://203.21.120.60:8080/maximus_trade/hs/direct/Order
+ * - paymentcheck: false
+ * - Response: { uuid, documentNumber } - Draft захиалгын UUID
  * 
- * STEP 2: FINISH (БАТАЛГААЖУУЛАХ)
- * - POST /hs/od/Order
- * - Body: { step: "finish", uuid, latitudeFinish, longitudeFinish, end_date, loan, loanDescription }
+ * ERP STEP 2: FINISH (БАТАЛГААЖУУЛАХ)
+ * - POST http://203.21.120.60:8080/maximus_trade/hs/direct/Order
+ * - paymentcheck: true, finishStep: true, latitudeFinish, longitudeFinish, end_date
  * - Response: { success, order }
  * 
  * ============================================================================
- * UI FLOW: 3-STEP
+ * UI FLOW: 4-STEP
  * ============================================================================
  * 
- * 1. REVIEW - Сагс харах, агуулах сонгох
- * 2. CONFIRM - Нэмэлт мэдээлэл (paymentcheck, тэмдэглэл)
- * 3. SUCCESS - Амжилттай мэдээлэл
+ * 1. REVIEW - Сагс харах, агуулах сонгох, бараа жагсаалт
+ * 2. PAYMENT - Төлбөрийн хэлбэр сонгох, тэмдэглэл -> Draft илгээх (ERP Step 1)
+ * 3. CONFIRM - Баталгаажуулах мэдээлэл -> Finish илгээх (ERP Step 2)
+ * 4. SUCCESS - Амжилттай мэдээлэл
  * 
  * ============================================================================
  */
@@ -63,18 +64,33 @@ import { useAuthStore } from '../../stores/auth-store';
 
 const { width } = Dimensions.get('window');
 
+// ==========================================================================
+// ERP API ТОХИРГОО (Шууд холболт)
+// ==========================================================================
+const ERP_BASE_URL = 'http://203.21.120.60:8080/maximus_trade/hs';
+const ERP_ORDER_PATH = '/direct/Order';
+const ERP_USERNAME = 'TestAPI';
+const ERP_PASSWORD = 'jI9da0zu';
+
+// Base64 encode for Basic Auth
+const ERP_AUTH = btoa(`${ERP_USERNAME}:${ERP_PASSWORD}`);
+
+// Mobile version
+const MOBILE_VERSION = '2.2.2';
+
 // Step definitions
-type CheckoutStep = 'review' | 'confirm' | 'success';
+type CheckoutStep = 'review' | 'payment' | 'confirm' | 'success';
 
 const STEPS = [
   { key: 'review', label: 'Шалгах', icon: Package },
-  { key: 'confirm', label: 'Баталгаажуулах', icon: CreditCard },
+  { key: 'payment', label: 'Төлбөр', icon: CreditCard },
+  { key: 'confirm', label: 'Баталгаажуулах', icon: Check },
   { key: 'success', label: 'Дууссан', icon: CheckCircle },
 ] as const;
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  
+
   // Stores
   const {
     items,
@@ -90,29 +106,29 @@ export default function CheckoutScreen() {
     orderError,
     clearCart,
   } = useCartStore();
-  
-  const { 
-    selectedWarehouse, 
+
+  const {
+    selectedWarehouse,
   } = useWarehouseStore();
-  
-  const { erpDetails } = useAuthStore();
-  
+
+  const { erpDetails, user } = useAuthStore();
+
   // Local state
   const [currentStep, setCurrentStep] = useState<CheckoutStep>('review');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Form state
   const [paymentCheck, setPaymentCheck] = useState<'cash' | 'transfer' | 'loan'>('cash');
   const [note, setNote] = useState('');
-  
+
   // Location state
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  
+
   // Created order info
   const [createdOrderCode, setCreatedOrderCode] = useState<string | null>(null);
   const [createdOrderUuid, setCreatedOrderUuid] = useState<string | null>(null);
-  
+
   /**
    * Get user location
    */
@@ -123,7 +139,7 @@ export default function CheckoutScreen() {
         setLocationError('Байршил авах зөвшөөрөл олгогдоогүй');
         return;
       }
-      
+
       try {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
@@ -137,71 +153,100 @@ export default function CheckoutScreen() {
       }
     })();
   }, []);
-  
+
   /**
    * formatPrice: Мөнгөн дүн форматлах
    */
   const formatPrice = (price: number) => {
     return '₮' + price.toLocaleString();
   };
-  
+
   /**
-   * handleSubmitDraft: Step 1 - Draft үүсгэх
+   * handleSubmitDraft: Step 1 - Draft захиалга үүсгэх
+   * ERP шууд: POST /direct/Order (paymentcheck: false)
    */
   const handleSubmitDraft = async () => {
     if (!selectedPartner || !selectedWarehouse || !userLocation) {
       Alert.alert('Алдаа', 'Бүх мэдээлэл бөглөгдөөгүй байна');
       return;
     }
-    
+
     setIsSubmitting(true);
     setOrderStatus('submitting');
     setOrderError(null);
-    
+
     try {
-      // Prepare products data
-      const productsData = items.map((item) => ({
+      // Current datetime
+      const now = new Date();
+      const datetime = now.toISOString().slice(0, 19).replace('T', ' ');
+
+      // Build order products for ERP format
+      const orderProducts = items.map((item) => ({
         productId: item.productId,
-        name: item.name,
-        price: item.price,
-        quantity: item.totalQuantity,
-        stocks: item.stocks.map((s) => ({
-          stockTypeId: s.typeId,
+        stock: item.stocks.map((s) => ({
+          typeId: s.typeId,
           count: s.count,
-          pcs: s.pcs,
         })),
+        priceType: selectedWarehouse.priceTypeId,
+        sale: 0,
+        promotions: [],
       }));
-      
-      // API call - Draft
-      const response = await fetch(`https://erp.maximus.mn/hs/od/Order`, {
+
+      // Build Step 1 (Draft) request
+      const draftRequest = {
+        uuid: '', // Empty for new order
+        username: user?.username || '11202250', // Борлуулагчийн username
+        imei: erpDetails?.[0]?.routeIMEI || 'MOBILE-SALES-APP',
+        companyId: selectedPartner.id,
+        contractId: selectedPartner.contract?.contractId || 'db05d0d6-9c37-11e5-9beb-3085a97c20be',
+        paymentType: 1,
+        cashAmount: null,
+        warehouseId: selectedWarehouse.uuid,
+        deliveryType: 1,
+        deliveryDatetime: datetime,
+        deliveryAdditionalInfo: '',
+        description: note || '',
+        orderProducts,
+        priceTypeId: selectedWarehouse.priceTypeId,
+        paymentcheck: false, // Step 1 = false (Draft)
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        useDiscount: true,
+        customerPriceTypeId: selectedWarehouse.priceTypeId,
+        deliveryDate: null,
+        isSale: selectedWarehouse.isSale || false,
+        start_date: datetime,
+        end_date: datetime,
+        mobileVersion: MOBILE_VERSION,
+      };
+
+      // API call - Draft шууд ERP руу
+      const apiUrl = `${ERP_BASE_URL}${ERP_ORDER_PATH}`;
+      console.log('[Checkout] Calling ERP:', apiUrl);
+      console.log('[Checkout] Request body:', JSON.stringify(draftRequest, null, 2));
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Add auth headers if needed
+          'Accept': 'application/json',
+          'Authorization': `Basic ${ERP_AUTH}`,
         },
-        body: JSON.stringify({
-          step: 'draft',
-          companyId: selectedPartner.id,
-          warehouseId: selectedWarehouse.uuid,
-          routeId: erpDetails?.[0]?.routeId,
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          products: productsData,
-          paymentcheck: paymentCheck,
-          note: note || undefined,
-        }),
+        body: JSON.stringify(draftRequest),
       });
-      
+
       const data = await response.json();
-      
+      console.log('[Checkout] Draft response:', data);
+
       if (data.uuid) {
         setDraftOrderUuid(data.uuid);
         setCreatedOrderUuid(data.uuid);
-        setCreatedOrderCode(data.orderCode || data.uuid);
+        // documentNumber хэрэглэгчид ойлгомжтой (жнь: MDMD-00009194)
+        setCreatedOrderCode(data.documentNumber || data.orderCode || data.uuid);
         setOrderStatus('draft');
-        setCurrentStep('confirm');
+        setCurrentStep('confirm'); // Payment -> Confirm step
       } else {
-        throw new Error(data.message || 'Draft үүсгэхэд алдаа');
+        throw new Error(data.error || data.message || 'Draft үүсгэхэд алдаа');
       }
     } catch (error: any) {
       console.error('[Checkout] Draft error:', error);
@@ -212,46 +257,96 @@ export default function CheckoutScreen() {
       setIsSubmitting(false);
     }
   };
-  
+
   /**
    * handleFinishOrder: Step 2 - Баталгаажуулах
+   * ERP шууд: POST /direct/Order (paymentcheck: true, finishStep: true)
    */
   const handleFinishOrder = async () => {
-    if (!draftOrderUuid || !userLocation) {
+    if (!draftOrderUuid || !userLocation || !selectedPartner || !selectedWarehouse) {
       Alert.alert('Алдаа', 'Draft захиалга олдсонгүй');
       return;
     }
-    
+
     setIsSubmitting(true);
     setOrderStatus('submitting');
-    
+
     try {
-      // API call - Finish
-      const response = await fetch(`https://erp.maximus.mn/hs/od/Order`, {
+      // Current datetime for end_date
+      const now = new Date();
+      const endDatetime = now.toISOString().slice(0, 19).replace('T', ' ');
+
+      // Build order products for ERP format
+      const orderProducts = items.map((item) => ({
+        productId: item.productId,
+        stock: item.stocks.map((s) => ({
+          typeId: s.typeId,
+          count: s.count,
+        })),
+        priceType: selectedWarehouse.priceTypeId,
+        sale: 0,
+        promotions: [],
+      }));
+
+      // Build Step 2 (Finish) request
+      const finishRequest = {
+        uuid: draftOrderUuid, // UUID from Step 1
+        finishStep: true, // ЧУХАЛ: Finish step
+        mobileVersion: MOBILE_VERSION,
+        username: user?.username || '11202250', // Борлуулагчийн username
+        imei: erpDetails?.[0]?.routeIMEI || 'MOBILE-SALES-APP',
+        companyId: selectedPartner.id,
+        contractId: selectedPartner.contract?.contractId || 'db05d0d6-9c37-11e5-9beb-3085a97c20be',
+        paymentType: 1,
+        cashAmount: null,
+        warehouseId: selectedWarehouse.uuid,
+        deliveryType: 1,
+        deliveryDatetime: endDatetime,
+        deliveryAdditionalInfo: '',
+        description: note || '',
+        orderProducts,
+        priceTypeId: selectedWarehouse.priceTypeId,
+        customerPriceTypeId: selectedWarehouse.priceTypeId,
+        deliveryDate: null,
+        isSale: selectedWarehouse.isSale || false,
+        start_date: endDatetime,
+        // Finish-specific fields
+        latitudeFinish: userLocation.latitude,
+        longitudeFinish: userLocation.longitude,
+        paymentcheck: true, // Step 2 = true (Finish)
+        useDiscount: true,
+        end_date: endDatetime,
+        // Loan fields
+        loan: paymentCheck === 'loan',
+        loanDescription: paymentCheck === 'loan' ? note : '',
+      };
+
+      // API call - Finish шууд ERP руу
+      const apiUrl = `${ERP_BASE_URL}${ERP_ORDER_PATH}`;
+      console.log('[Checkout] Calling ERP Finish:', apiUrl);
+      console.log('[Checkout] Finish request:', JSON.stringify(finishRequest, null, 2));
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Basic ${ERP_AUTH}`,
         },
-        body: JSON.stringify({
-          step: 'finish',
-          uuid: draftOrderUuid,
-          latitudeFinish: userLocation.latitude,
-          longitudeFinish: userLocation.longitude,
-          end_date: new Date().toISOString(),
-          loan: paymentCheck === 'loan',
-          loanDescription: paymentCheck === 'loan' ? note : undefined,
-        }),
+        body: JSON.stringify(finishRequest),
       });
-      
+
       const data = await response.json();
-      
-      if (data.success || data.status === 'finished') {
+      console.log('[Checkout] Finish response:', data);
+
+      // Check success - ERP may return different success indicators
+      if (data.success === true || data.status === 'success' || data.uuid || !data.error) {
         setOrderStatus('finished');
         setCurrentStep('success');
         // Сагс цэвэрлэх
         clearCart();
       } else {
-        throw new Error(data.message || 'Баталгаажуулахад алдаа');
+        throw new Error(data.error || data.message || 'Баталгаажуулахад алдаа');
       }
     } catch (error: any) {
       console.error('[Checkout] Finish error:', error);
@@ -262,20 +357,20 @@ export default function CheckoutScreen() {
       setIsSubmitting(false);
     }
   };
-  
+
   /**
    * renderStepIndicator: Step indicator UI
    */
   const renderStepIndicator = () => {
     const currentIndex = STEPS.findIndex((s) => s.key === currentStep);
-    
+
     return (
       <View style={styles.stepIndicator}>
         {STEPS.map((step, index) => {
           const Icon = step.icon;
           const isActive = index === currentIndex;
           const isCompleted = index < currentIndex;
-          
+
           return (
             <React.Fragment key={step.key}>
               <View style={[
@@ -301,7 +396,7 @@ export default function CheckoutScreen() {
       </View>
     );
   };
-  
+
   /**
    * renderReviewStep: Step 1 - Шалгах
    */
@@ -324,7 +419,7 @@ export default function CheckoutScreen() {
           </HStack>
         </View>
       </View>
-      
+
       {/* Warehouse Info (Read-only) */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Агуулах</Text>
@@ -342,7 +437,7 @@ export default function CheckoutScreen() {
           </HStack>
         </View>
       </View>
-      
+
       {/* Order Summary */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Захиалгын хураангуй</Text>
@@ -362,7 +457,7 @@ export default function CheckoutScreen() {
           </HStack>
         </View>
       </View>
-      
+
       {/* Product List with PromoPoints */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Барааны жагсаалт</Text>
@@ -393,7 +488,7 @@ export default function CheckoutScreen() {
           ))}
         </View>
       </View>
-      
+
       {/* Location Status */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Байршил</Text>
@@ -426,7 +521,43 @@ export default function CheckoutScreen() {
           </HStack>
         </View>
       </View>
-      
+    </ScrollView>
+  );
+
+  /**
+   * renderPaymentStep: Step 2 - Төлбөрийн мэдээлэл
+   * Draft захиалга илгээгдэнэ (ERP Step 1)
+   */
+  const renderPaymentStep = () => (
+    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Order Summary */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Захиалгын хураангуй</Text>
+        <View style={styles.summaryCard}>
+          <HStack style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Харилцагч</Text>
+            <Text style={styles.summaryValue}>{selectedPartner?.name}</Text>
+          </HStack>
+          <HStack style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Агуулах</Text>
+            <Text style={styles.summaryValue}>{selectedWarehouse?.name}</Text>
+          </HStack>
+          <HStack style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Нийт төрөл</Text>
+            <Text style={styles.summaryValue}>{items.length}</Text>
+          </HStack>
+          <HStack style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Нийт ширхэг</Text>
+            <Text style={styles.summaryValue}>{totalItems}</Text>
+          </HStack>
+          <View style={styles.divider} />
+          <HStack style={styles.summaryRow}>
+            <Text style={styles.summaryTotalLabel}>Нийт дүн</Text>
+            <Text style={styles.summaryTotalValue}>{formattedTotal}</Text>
+          </HStack>
+        </View>
+      </View>
+
       {/* Payment Method */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Төлбөрийн хэлбэр</Text>
@@ -460,7 +591,7 @@ export default function CheckoutScreen() {
           ))}
         </View>
       </View>
-      
+
       {/* Note */}
       <View style={[styles.section, { marginBottom: 120 }]}>
         <Text style={styles.sectionTitle}>Тэмдэглэл</Text>
@@ -476,26 +607,138 @@ export default function CheckoutScreen() {
       </View>
     </ScrollView>
   );
-  
+
   /**
-   * renderConfirmStep: Step 2 - Баталгаажуулах
+   * renderConfirmStep: Step 3 - Баталгаажуулах
+   * Finish захиалга илгээгдэнэ (ERP Step 2)
    */
-  const renderConfirmStep = () => (
-    <View style={styles.confirmContent}>
-      <View style={styles.confirmIcon}>
-        <Clock size={48} color="#2563EB" />
+  const renderConfirmStep = () => {
+    // Current datetime for display
+    const now = new Date();
+    const endDateFormatted = now.toLocaleString('mn-MN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    return (
+      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={[styles.confirmContent, { paddingTop: 20 }]}>
+          <View style={styles.confirmIcon}>
+            <Clock size={48} color="#2563EB" />
+          </View>
+          <Text style={styles.confirmTitle}>Draft захиалга үүслээ</Text>
+          <Text style={styles.confirmSubtitle}>
+            Захиалгын дугаар: {createdOrderCode}
+          </Text>
+          <Text style={styles.confirmDescription}>
+            Захиалгыг баталгаажуулахын тулд доорх товчийг дарна уу.
+            Баталгаажуулсны дараа засварлах боломжгүй болохыг анхаарна уу.
+          </Text>
+
+          {/* Order Summary */}
+          <View style={styles.confirmSummary}>
+            <HStack style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Харилцагч</Text>
+              <Text style={styles.summaryValue}>{selectedPartner?.name}</Text>
+            </HStack>
+            <HStack style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Агуулах</Text>
+              <Text style={styles.summaryValue}>{selectedWarehouse?.name}</Text>
+            </HStack>
+            <HStack style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Нийт дүн</Text>
+              <Text style={styles.summaryValue}>{formattedTotal}</Text>
+            </HStack>
+            <HStack style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Төлбөр</Text>
+              <Text style={styles.summaryValue}>
+                {paymentCheck === 'cash' ? 'Бэлэн' : paymentCheck === 'transfer' ? 'Шилжүүлэг' : 'Зээл'}
+              </Text>
+            </HStack>
+          </View>
+
+          {/* Finish Step Info */}
+          <View style={[styles.section, { marginTop: 16, width: '100%' }]}>
+            <Text style={styles.sectionTitle}>Баталгаажуулах мэдээлэл</Text>
+            <View style={styles.infoCard}>
+              <VStack style={{ gap: 12 }}>
+                {/* Location */}
+                <HStack style={{ alignItems: 'center', gap: 12 }}>
+                  <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
+                    <MapPin size={18} color="#059669" />
+                  </View>
+                  <VStack style={{ flex: 1 }}>
+                    <Text style={styles.infoTitle}>Байршил (Finish)</Text>
+                    <Text style={styles.infoSubtitle}>
+                      {userLocation ? `${userLocation.latitude.toFixed(6)}, ${userLocation.longitude.toFixed(6)}` : 'Байршил олдсонгүй'}
+                    </Text>
+                  </VStack>
+                </HStack>
+
+                {/* End Date */}
+                <HStack style={{ alignItems: 'center', gap: 12 }}>
+                  <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Clock size={18} color="#D97706" />
+                  </View>
+                  <VStack style={{ flex: 1 }}>
+                    <Text style={styles.infoTitle}>Дуусах огноо (end_date)</Text>
+                    <Text style={styles.infoSubtitle}>{endDateFormatted}</Text>
+                  </VStack>
+                </HStack>
+
+                {/* Payment Check */}
+                <HStack style={{ alignItems: 'center', gap: 12 }}>
+                  <View style={[styles.iconBox, { backgroundColor: '#DBEAFE' }]}>
+                    <CreditCard size={18} color="#2563EB" />
+                  </View>
+                  <VStack style={{ flex: 1 }}>
+                    <Text style={styles.infoTitle}>Төлбөр шалгах (paymentcheck)</Text>
+                    <Text style={[styles.infoSubtitle, { color: '#059669', fontFamily: 'GIP-SemiBold' }]}>true</Text>
+                  </VStack>
+                </HStack>
+
+                {/* Finish Step */}
+                <HStack style={{ alignItems: 'center', gap: 12 }}>
+                  <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
+                    <Check size={18} color="#DC2626" />
+                  </View>
+                  <VStack style={{ flex: 1 }}>
+                    <Text style={styles.infoTitle}>Эцсийн алхам (finishStep)</Text>
+                    <Text style={[styles.infoSubtitle, { color: '#DC2626', fontFamily: 'GIP-SemiBold' }]}>true</Text>
+                  </VStack>
+                </HStack>
+              </VStack>
+            </View>
+          </View>
+          {/* Bottom spacing for action button */}
+          <View style={{ height: 120 }} />
+        </View>
+      </ScrollView>
+    );
+  };
+
+  /**
+   * renderSuccessStep: Step 4 - Амжилттай (Congratulations)
+   */
+  const renderSuccessStep = () => (
+    <View style={styles.successContent}>
+      <View style={styles.successIcon}>
+        <CheckCircle size={80} color="#059669" />
       </View>
-      <Text style={styles.confirmTitle}>Draft захиалга үүслээ</Text>
-      <Text style={styles.confirmSubtitle}>
-        Код: {createdOrderCode}
+      <Text style={styles.successTitle}>🎉 Баяр хүргэе!</Text>
+      <Text style={styles.successSubtitle}>
+        Захиалга амжилттай баталгаажлаа
       </Text>
-      <Text style={styles.confirmDescription}>
-        Захиалгыг баталгаажуулахын тулд доорх товчийг дарна уу.
-        Баталгаажуулсны дараа засварлах боломжгүй болохыг анхаарна уу.
-      </Text>
-      
-      {/* Summary */}
-      <View style={styles.confirmSummary}>
+
+      {/* Order Info Card */}
+      <View style={[styles.confirmSummary, { marginTop: 24 }]}>
+        <HStack style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Захиалгын дугаар</Text>
+          <Text style={[styles.summaryValue, { color: '#059669', fontFamily: 'GIP-Bold' }]}>{createdOrderCode}</Text>
+        </HStack>
         <HStack style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Харилцагч</Text>
           <Text style={styles.summaryValue}>{selectedPartner?.name}</Text>
@@ -504,54 +747,41 @@ export default function CheckoutScreen() {
           <Text style={styles.summaryLabel}>Агуулах</Text>
           <Text style={styles.summaryValue}>{selectedWarehouse?.name}</Text>
         </HStack>
+        <View style={styles.divider} />
         <HStack style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Нийт дүн</Text>
-          <Text style={styles.summaryValue}>{formattedTotal}</Text>
-        </HStack>
-        <HStack style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Төлбөр</Text>
-          <Text style={styles.summaryValue}>
-            {paymentCheck === 'cash' ? 'Бэлэн' : paymentCheck === 'transfer' ? 'Шилжүүлэг' : 'Зээл'}
-          </Text>
+          <Text style={styles.summaryTotalLabel}>Нийт дүн</Text>
+          <Text style={styles.summaryTotalValue}>{formattedTotal}</Text>
         </HStack>
       </View>
-    </View>
-  );
-  
-  /**
-   * renderSuccessStep: Step 3 - Амжилттай
-   */
-  const renderSuccessStep = () => (
-    <View style={styles.successContent}>
-      <View style={styles.successIcon}>
-        <CheckCircle size={64} color="#059669" />
-      </View>
-      <Text style={styles.successTitle}>Захиалга амжилттай!</Text>
-      <Text style={styles.successSubtitle}>
-        Захиалгын код: {createdOrderCode}
-      </Text>
+
       <Text style={styles.successDescription}>
-        Захиалга амжилттай баталгаажлаа. 
-        ERP систем дээр харагдах болно.
+        Захиалга ERP систем дээр амжилттай бүртгэгдлээ.
+        Та захиалгуудаа дараах хэсгээс харах боломжтой.
       </Text>
-      
+
       <View style={styles.successActions}>
         <TouchableOpacity
           style={styles.successPrimaryButton}
-          onPress={() => router.push('/orders')}
+          onPress={() => {
+            clearCart();
+            router.push('/orders');
+          }}
         >
           <Text style={styles.successPrimaryButtonText}>Захиалгууд харах</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.successSecondaryButton}
-          onPress={() => router.push('/partners')}
+          onPress={() => {
+            clearCart();
+            router.push('/partners');
+          }}
         >
-          <Text style={styles.successSecondaryButtonText}>Шинэ захиалга</Text>
+          <Text style={styles.successSecondaryButtonText}>Шинэ захиалга үүсгэх</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-  
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -563,48 +793,77 @@ export default function CheckoutScreen() {
         )}
         <Text style={styles.headerTitle}>
           {currentStep === 'review' && 'Захиалга шалгах'}
+          {currentStep === 'payment' && 'Төлбөрийн мэдээлэл'}
           {currentStep === 'confirm' && 'Баталгаажуулах'}
           {currentStep === 'success' && 'Амжилттай'}
         </Text>
         <View style={{ width: 40 }} />
       </View>
-      
+
       {/* Step Indicator */}
       {renderStepIndicator()}
-      
+
       {/* Content */}
       {currentStep === 'review' && renderReviewStep()}
+      {currentStep === 'payment' && renderPaymentStep()}
       {currentStep === 'confirm' && renderConfirmStep()}
       {currentStep === 'success' && renderSuccessStep()}
-      
+
       {/* Bottom Action */}
       {currentStep !== 'success' && (
         <View style={styles.bottomAction}>
+          {/* Step 1: Review -> Payment */}
           {currentStep === 'review' && (
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                (!selectedWarehouse || !userLocation || isSubmitting) && styles.actionButtonDisabled,
+                (!selectedWarehouse || !userLocation) && styles.actionButtonDisabled,
               ]}
-              onPress={handleSubmitDraft}
-              disabled={!selectedWarehouse || !userLocation || isSubmitting}
+              onPress={() => setCurrentStep('payment')}
+              disabled={!selectedWarehouse || !userLocation}
             >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <>
-                  <Text style={styles.actionButtonText}>Үргэлжлүүлэх</Text>
-                  <ChevronLeft size={20} color="white" style={{ transform: [{ rotate: '180deg' }] }} />
-                </>
-              )}
+              <Text style={styles.actionButtonText}>Үргэлжлүүлэх</Text>
+              <ChevronLeft size={20} color="white" style={{ transform: [{ rotate: '180deg' }] }} />
             </TouchableOpacity>
           )}
-          
-          {currentStep === 'confirm' && (
+
+          {/* Step 2: Payment -> Confirm (Draft илгээх) */}
+          {currentStep === 'payment' && (
             <HStack style={{ gap: 12 }}>
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setCurrentStep('review')}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.cancelButtonText}>Буцах</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isSubmitting && styles.actionButtonDisabled,
+                  { flex: 1 },
+                ]}
+                onPress={handleSubmitDraft}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <>
+                    <Text style={styles.actionButtonText}>Draft илгээх</Text>
+                    <ChevronLeft size={20} color="white" style={{ transform: [{ rotate: '180deg' }] }} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </HStack>
+          )}
+
+          {/* Step 3: Confirm -> Success (Finish илгээх) */}
+          {currentStep === 'confirm' && (
+            <HStack style={{ gap: 12 }}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setCurrentStep('payment')}
                 disabled={isSubmitting}
               >
                 <Text style={styles.cancelButtonText}>Буцах</Text>
@@ -913,10 +1172,8 @@ const styles = StyleSheet.create({
   },
   // Confirm Step
   confirmContent: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
+    padding: 24,
   },
   confirmIcon: {
     width: 96,
