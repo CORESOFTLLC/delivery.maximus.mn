@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Image, Platform, Text as RNText, ScrollView, Alert } from 'react-native';
-import { Home, Percent, ShoppingCart, ClipboardList, Users, Menu, X, Wallet, CalendarClock, UserPlus, Warehouse, ChevronRight, LogOut } from 'lucide-react-native';
+import { Warehouse, Truck, Menu, X, User, Settings, LogOut, ChevronRight, MapPin } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { version as appVersion } from '../../package.json';
-import { useAuthStore } from '../../stores/auth-store';
+import { useAuthStore } from '../../stores/delivery-auth-store';
 
 // Drawer Menu Component
 function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -26,10 +26,9 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   }, []);
 
   const menuItems = [
-    { icon: UserPlus, label: 'Шинэ харилцагч', route: '/partners/new', color: '#059669' },
-    { icon: Warehouse, label: 'Агуулах сонгох', route: '/warehouse', color: '#7C3AED' },
-    { icon: Wallet, label: 'Санхүү', route: '/finance', color: '#2563EB' },
-    { icon: CalendarClock, label: 'Цаг бүртгэл', route: '/attendance', color: '#D97706' },
+    { icon: User, label: 'Профайл', route: '/profile', color: '#2563EB' },
+    { icon: MapPin, label: 'Байршил', route: '/location', color: '#059669' },
+    { icon: Settings, label: 'Тохиргоо', route: '/settings', color: '#6B7280' },
   ];
 
   const handleMenuPress = (route: string) => {
@@ -46,8 +45,8 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
         {
           text: 'Гарах',
           style: 'destructive',
-          onPress: () => {
-            logout();
+          onPress: async () => {
+            await logout();
             onClose();
             router.replace('/login');
           }
@@ -56,7 +55,7 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
     );
   };
 
-  // Get initials from user name (first 2 characters)
+  // Get initials from user name
   const userInitials = useMemo(() => {
     const name = user?.name || 'Хэрэглэгч';
     const words = name.trim().split(' ');
@@ -65,6 +64,14 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
     }
     return name.slice(0, 2).toUpperCase();
   }, [user?.name]);
+
+  // Worker type label
+  const workerTypeLabel = useMemo(() => {
+    const type = user?.worker_type;
+    if (type === 'driver') return 'Жолооч';
+    if (type === 'warehouse') return 'Нярав';
+    return 'Ажилтан';
+  }, [user?.worker_type]);
 
   // Early return AFTER all hooks
   if (!isOpen) return null;
@@ -89,9 +96,9 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               <RNText style={styles.drawerUserName} numberOfLines={1}>
                 {user?.name || 'Хэрэглэгч'}
               </RNText>
-              <RNText style={styles.drawerUserEmail} numberOfLines={1}>
-                {user?.username || ''}
-              </RNText>
+              <View style={styles.workerBadge}>
+                <RNText style={styles.workerBadgeText}>{workerTypeLabel}</RNText>
+              </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={22} color="#6B7280" />
@@ -145,7 +152,7 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
           {/* Copyright */}
           <RNText style={styles.copyright}>
-            © 2026 MAXIMUS DISTRIBUTION LLC
+            Delivery Maximus © 2026
           </RNText>
         </View>
       </View>
@@ -176,68 +183,73 @@ export default function TabsLayout() {
           ),
         }}
       >
+        {/* Агуулах Tab - Warehouse checking */}
+        <Tabs.Screen
+          name="warehouse"
+          options={{
+            title: 'Агуулах',
+            headerTitle: 'Агуулах тулгалт',
+            tabBarIcon: ({ color, size }) => <Warehouse size={size} color={color} />,
+          }}
+        />
+        
+        {/* Түгээлт Tab - Delivery orders */}
+        <Tabs.Screen
+          name="delivery"
+          options={{
+            title: 'Түгээлт',
+            headerTitle: 'Түгээлт',
+            tabBarIcon: ({ color, size }) => <Truck size={size} color={color} />,
+          }}
+        />
+
+        {/* Hidden screens - for navigation but not in tab bar */}
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Нүүр',
-            headerTitle: 'MAXIMUS Sales',
-            tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="promo"
           options={{
-            title: 'Промо',
-            headerTitle: 'Промо урамшуулал',
-            tabBarIcon: ({ color, size }) => <Percent size={size} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="cart"
           options={{
-            title: 'Сагс',
-            headerTitle: 'Сагс',
-            tabBarIcon: ({ color, size }) => <ShoppingCart size={size} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="orders"
           options={{
-            title: 'Захиалга',
-            headerTitle: 'Захиалгууд',
-            tabBarIcon: ({ color, size }) => <ClipboardList size={size} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="partners"
           options={{
-            title: 'Харилцагч',
-            headerShown: false,
-            tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="products"
           options={{
             href: null,
-            title: 'Бүтээгдэхүүн',
-            headerTitle: 'Бүтээгдэхүүн',
           }}
         />
         <Tabs.Screen
           name="work"
           options={{
             href: null,
-            title: 'Ажил',
-            headerTitle: 'Ажлын жагсаалт',
           }}
         />
         <Tabs.Screen
           name="attendance"
           options={{
             href: null,
-            title: 'Ирц',
-            headerTitle: 'Цаг бүртгэл',
           }}
         />
       </Tabs>
@@ -343,11 +355,18 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Bold',
     color: '#111827',
   },
-  drawerUserEmail: {
-    fontSize: 12,
-    fontFamily: 'GIP-Regular',
-    color: '#6B7280',
-    marginTop: 2,
+  workerBadge: {
+    marginTop: 4,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  workerBadgeText: {
+    fontSize: 11,
+    fontFamily: 'GIP-SemiBold',
+    color: '#2563EB',
   },
   closeButton: {
     width: 36,

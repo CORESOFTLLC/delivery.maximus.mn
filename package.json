@@ -1,6 +1,6 @@
 {
-  "name": "sales-maximus",
-  "version": "0.0.1",
+  "name": "maximus-delivery",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev:web": "pnpm --filter web dev",
-    "dev:mobile": "pnpm --filter mobile start",
+    "dev:mobile": "pnpm --filter maximus-delivery start",
     "build:web": "pnpm --filter web build",
     "typecheck": "pnpm -r typecheck"
   },

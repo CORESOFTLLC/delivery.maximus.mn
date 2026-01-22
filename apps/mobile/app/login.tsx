@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { KeyboardAvoidingView, Platform, Image, View, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  KeyboardAvoidingView, 
+  Platform, 
+  Image, 
+  View, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert 
+} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, User, Lock, AlertCircle, Smartphone, Copy } from 'lucide-react-native';
+import { AlertCircle, Smartphone, Copy, Lock, Hash } from 'lucide-react-native';
 import * as Application from 'expo-application';
-import { useAuthStore } from '../stores/auth-store';
+import { useAuthStore } from '../stores/delivery-auth-store';
 import { 
   Box, 
   VStack, 
@@ -23,11 +32,13 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login, isLoading, error, clearError } = useAuthStore();
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ username?: string; password?: string }>({});
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [pin, setPin] = useState(['', '', '', '', '', '', '', '']); // 8 digits
+  const [formErrors, setFormErrors] = useState<{ code?: string; pin?: string }>({});
   const [deviceId, setDeviceId] = useState<string>('');
+  
+  // Refs for PIN inputs
+  const pinRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
     const getDeviceId = async () => {
@@ -42,20 +53,47 @@ export default function LoginScreen() {
   }, []);
 
   const validateForm = (): boolean => {
-    const errors: { username?: string; password?: string } = {};
+    const errors: { code?: string; pin?: string } = {};
 
-    if (!username.trim()) {
-      errors.username = 'Хэрэглэгчийн нэр оруулна уу';
+    if (!employeeCode.trim()) {
+      errors.code = 'Ажилтны код оруулна уу';
+    } else if (!/^\d{8}$/.test(employeeCode.trim())) {
+      errors.code = 'Ажилтны код 8 оронтой байх ёстой';
     }
 
-    if (!password.trim()) {
-      errors.password = 'Нууц үг оруулна уу';
-    } else if (password.length < 4) {
-      errors.password = 'Нууц үг хамгийн багадаа 4 тэмдэгт байх ёстой';
+    const pinValue = pin.join('');
+    if (!pinValue) {
+      errors.pin = 'PIN код оруулна уу';
+    } else if (pinValue.length !== 8) {
+      errors.pin = 'PIN код 8 оронтой байх ёстой';
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handlePinChange = (value: string, index: number) => {
+    if (!/^\d*$/.test(value)) return; // Only allow digits
+
+    const newPin = [...pin];
+    newPin[index] = value;
+    setPin(newPin);
+
+    // Clear error when user starts typing
+    if (formErrors.pin) {
+      setFormErrors((prev) => ({ ...prev, pin: undefined }));
+    }
+
+    // Auto focus next input
+    if (value && index < 7) {
+      pinRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePinKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !pin[index] && index > 0) {
+      pinRefs.current[index - 1]?.focus();
+    }
   };
 
   const handleLogin = async () => {
@@ -65,14 +103,20 @@ export default function LoginScreen() {
       return;
     }
 
-    console.log('Login attempt:', { username: username.trim(), password: '***' });
+    const pinValue = pin.join('');
+    console.log('Login attempt:', { employee_code: employeeCode.trim(), system_pin: '********' });
     
-    const success = await login(username.trim(), password);
+    const success = await login(employeeCode.trim(), pinValue);
     console.log('Login result:', success);
 
     if (success) {
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/warehouse');
     }
+  };
+
+  const clearPin = () => {
+    setPin(['', '', '', '', '', '', '', '']);
+    pinRefs.current[0]?.focus();
   };
 
   return (
@@ -96,10 +140,10 @@ export default function LoginScreen() {
                   resizeMode="contain"
                 />
                 <Heading size="2xl" className="text-typography-950 font-bold mt-4">
-                  Нэвтрэх
+                  Түгээлт
                 </Heading>
                 <Text size="md" className="text-typography-500 text-center mt-2">
-                  Байгууллагын дотоод борлуулалтын апп
+                  Хүргэлтийн менежмент систем
                 </Text>
               </Center>
 
@@ -117,74 +161,90 @@ export default function LoginScreen() {
 
               {/* Form */}
               <VStack space="xl">
-                {/* Username Input */}
+                {/* Employee Code Input */}
                 <View>
                   <Text size="sm" className="text-typography-700 font-medium mb-2">
-                    Хэрэглэгчийн нэр
+                    Ажилтны код
                   </Text>
-                  <View style={[styles.inputContainer, formErrors.username && styles.inputError]}>
-                    <User size={20} color="#9CA3AF" style={styles.inputIcon} />
+                  <View style={[styles.inputContainer, formErrors.code && styles.inputError]}>
+                    <Hash size={20} color="#9CA3AF" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="101012501"
+                      placeholder="19260001"
                       placeholderTextColor="#9CA3AF"
-                      value={username}
+                      value={employeeCode}
                       onChangeText={(text) => {
-                        setUsername(text);
-                        if (formErrors.username) {
-                          setFormErrors((prev) => ({ ...prev, username: undefined }));
+                        // Only allow digits
+                        const cleaned = text.replace(/\D/g, '');
+                        setEmployeeCode(cleaned.slice(0, 8));
+                        if (formErrors.code) {
+                          setFormErrors((prev) => ({ ...prev, code: undefined }));
                         }
                       }}
+                      keyboardType="number-pad"
+                      maxLength={8}
                       autoCapitalize="none"
                       autoCorrect={false}
                       editable={!isLoading}
                     />
                   </View>
-                  {formErrors.username && (
+                  {formErrors.code && (
                     <HStack space="xs" className="items-center mt-1">
                       <AlertCircle size={14} color="#DC2626" />
-                      <Text size="xs" className="text-error-600">{formErrors.username}</Text>
+                      <Text size="xs" className="text-error-600">{formErrors.code}</Text>
                     </HStack>
                   )}
+                  <Text size="xs" className="text-typography-400 mt-1">
+                    Формат: [Алба 2 орон][Он 2 орон][Дугаар 4 орон]
+                  </Text>
                 </View>
 
-                {/* Password Input */}
+                {/* PIN Input - 8 digits */}
                 <View>
-                  <Text size="sm" className="text-typography-700 font-medium mb-2">
-                    Нууц үг
-                  </Text>
-                  <View style={[styles.inputContainer, formErrors.password && styles.inputError]}>
-                    <Lock size={20} color="#9CA3AF" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Нууц үгээ оруулна уу"
-                      placeholderTextColor="#9CA3AF"
-                      value={password}
-                      onChangeText={(text) => {
-                        setPassword(text);
-                        if (formErrors.password) {
-                          setFormErrors((prev) => ({ ...prev, password: undefined }));
-                        }
-                      }}
-                      secureTextEntry={!showPassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!isLoading}
-                    />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-                      {showPassword ? (
-                        <EyeOff size={20} color="#9CA3AF" />
-                      ) : (
-                        <Eye size={20} color="#9CA3AF" />
-                      )}
+                  <HStack className="justify-between items-center mb-2">
+                    <Text size="sm" className="text-typography-700 font-medium">
+                      Системд нэвтрэх PIN (8 орон)
+                    </Text>
+                    <TouchableOpacity onPress={clearPin}>
+                      <Text size="xs" className="text-primary-600">Арилгах</Text>
                     </TouchableOpacity>
+                  </HStack>
+                  
+                  <View style={styles.pinContainer}>
+                    {pin.map((digit, index) => (
+                      <TextInput
+                        key={index}
+                        ref={(ref) => (pinRefs.current[index] = ref)}
+                        style={[
+                          styles.pinInput,
+                          digit && styles.pinInputFilled,
+                          formErrors.pin && styles.pinInputError,
+                        ]}
+                        value={digit}
+                        onChangeText={(value) => handlePinChange(value.slice(-1), index)}
+                        onKeyPress={(e) => handlePinKeyPress(e, index)}
+                        keyboardType="number-pad"
+                        maxLength={1}
+                        secureTextEntry
+                        editable={!isLoading}
+                        selectTextOnFocus
+                      />
+                    ))}
                   </View>
-                  {formErrors.password && (
-                    <HStack space="xs" className="items-center mt-1">
+                  
+                  {formErrors.pin && (
+                    <HStack space="xs" className="items-center mt-2">
                       <AlertCircle size={14} color="#DC2626" />
-                      <Text size="xs" className="text-error-600">{formErrors.password}</Text>
+                      <Text size="xs" className="text-error-600">{formErrors.pin}</Text>
                     </HStack>
                   )}
+                  
+                  <HStack space="xs" className="items-center mt-2">
+                    <Lock size={14} color="#9CA3AF" />
+                    <Text size="xs" className="text-typography-400">
+                      HR системээс олгосон 8 оронтой PIN код
+                    </Text>
+                  </HStack>
                 </View>
               </VStack>
 
@@ -229,10 +289,10 @@ export default function LoginScreen() {
                   </HStack>
                 </TouchableOpacity>
                 <Text size="xs" className="text-typography-400">
-                  App Version: 2.0.1
+                  Delivery Maximus v1.0.0
                 </Text>
                 <Text size="sm" className="text-typography-400 mt-2">
-                  © 2026 Sales Maximus
+                  © 2026 MAXIMUS DISTRIBUTION LLC
                 </Text>
               </VStack>
             </VStack>
@@ -262,11 +322,35 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 18,
     color: '#111827',
     height: '100%',
+    letterSpacing: 2,
+    fontWeight: '600',
   },
-  eyeButton: {
-    padding: 4,
+  pinContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  pinInput: {
+    flex: 1,
+    height: 48,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    backgroundColor: '#F9FAFB',
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  pinInputFilled: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  pinInputError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
   },
 });

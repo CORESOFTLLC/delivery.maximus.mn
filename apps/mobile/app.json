@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "MAXIMUS Sales",
-    "slug": "maximus-sales",
-    "version": "2.0.1",
-    "scheme": "maximus-sales",
+    "name": "MAXIMUS Delivery",
+    "slug": "maximus-delivery",
+    "version": "1.0.0",
+    "scheme": "maximus-delivery",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,9 +15,19 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.buderdene.maximussales",
+      "bundleIdentifier": "com.maximus.delivery",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "cloud.local.maximus.mn": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSTemporaryExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
       }
     },
     "android": {
@@ -26,7 +36,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.maximus.delivery"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -56,7 +56,7 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
     if (!db) {
-        db = await SQLite.openDatabaseAsync('maximus_sales.db');
+        db = await SQLite.openDatabaseAsync('maximus_delivery.db');
     }
     return db;
 };

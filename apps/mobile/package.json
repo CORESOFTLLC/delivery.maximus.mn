@@ -1,6 +1,6 @@
 {
-  "name": "mobile",
-  "version": "2.0.1",
+  "name": "maximus-delivery",
+  "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -23,6 +23,8 @@
     "expo-clipboard": "^8.0.8",
     "expo-constants": "~18.0.13",
     "expo-device": "^8.0.10",
+    "expo-haptics": "~15.0.8",
+    "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "^15.0.8",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
