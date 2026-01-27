@@ -38,9 +38,12 @@ export default function DeliveryScreen() {
       ]);
       
       if (packagesResult.success && packagesResult.data) {
-        // Show all packages for delivery view
-        // Packages with delivery_pending > 0 or delivered > 0 are relevant
-        setPackages(packagesResult.data.packages);
+        // Filter only packages with delivery_pending > 0 or delivered > 0
+        // These are packages that have left the warehouse (Түгээлт section only)
+        const deliveryPackages = packagesResult.data.packages.filter(
+          pkg => pkg.delivery_pending > 0 || pkg.delivered > 0 || pkg.failed > 0
+        );
+        setPackages(deliveryPackages);
       }
       
       if (profileResult.success && profileResult.data) {

@@ -365,8 +365,8 @@ export default function ShopDeliveryScreen() {
   // Bulk deliver all
   const handleBulkDeliver = () => {
     Alert.alert(
-      'Бүгдийг хүлээлгэх',
-      'Бүх барааг бүрэн хүлээлгэсэн гэж тэмдэглэх үү?',
+      'Бүгдийг бөглөх',
+      'Бүх барааг бүрэн хүргэсэн гэж тэмдэглэх үү?',
       [
         { text: 'Үгүй', style: 'cancel' },
         {

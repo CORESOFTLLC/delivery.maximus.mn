@@ -48,7 +48,7 @@ import {
   Store,
 } from 'lucide-react-native';
 import { Box, VStack, HStack, Text, Heading } from '../../../components/ui';
-import { getOrderDetail, getPackageOrders, DeliveryOrder, OrderProduct, OrderSummary, toggleProductCheck } from '../../../services/delivery-api';
+import { getOrderDetail, getPackageOrders, DeliveryOrder, OrderProduct, OrderSummary, toggleProductCheck, transformImageUrl } from '../../../services/delivery-api';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 
 // Warehouse related statuses for navigation
@@ -72,7 +72,19 @@ export default function OrderDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [checkingProducts, setCheckingProducts] = useState<Set<number>>(new Set());
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  
+  // Department id=3 бол warehouse (нярав), бусад бол driver (түгээгч)
   const [checkerType, setCheckerType] = useState<'warehouse' | 'driver'>('driver');
+  
+  // Worker department өөрчлөгдөхөд checkerType шинэчлэх
+  useEffect(() => {
+    if (worker?.department?.id === 3) {
+      setCheckerType('warehouse');
+    } else {
+      setCheckerType('driver');
+    }
+  }, [worker?.department?.id]);
   
   // Navigation state for prev/next
   const [packageOrders, setPackageOrders] = useState<DeliveryOrder[]>([]);
@@ -196,9 +208,9 @@ export default function OrderDetailScreen() {
     
     // Fire and forget API call
     toggleProductCheck({
-      orderUuid: order.uuid,
-      productId: product.id,
-      checkerType,
+      order_uuid: order.uuid,
+      product_id: product.id,
+      checker_type: checkerType,
       checked: shouldCheck,
       quantity: product.quantity,
     }).catch(() => {
@@ -219,18 +231,6 @@ export default function OrderDetailScreen() {
 
   const formatAmount = (amount: number) => {
     return amount.toLocaleString() + '₮';
-  };
-
-  // Calculate total discount from products
-  const calculateTotalDiscount = () => {
-    // Delivery API doesn't have discountPoint structure
-    return 0;
-  };
-
-  // Get discount items with details
-  const getDiscountItems = () => {
-    // Delivery API doesn't have discountPoint structure
-    return [];
   };
 
   // Calculate product total
@@ -276,10 +276,6 @@ export default function OrderDetailScreen() {
       </SafeAreaView>
     );
   }
-
-  const discountItems = getDiscountItems();
-  const totalDiscount = calculateTotalDiscount();
-  const hasPromotions = false; // Delivery API doesn't have promotionPoint
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -373,7 +369,8 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* Discount Points Card */}
+        {/* Discount Points Card - only show if has discount */}
+        {order.total_discount_point_amount && parseFloat(order.total_discount_point_amount) > 0 && (
         <View style={styles.card}>
           <HStack style={{ alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <View style={[styles.cardIconSmall, { backgroundColor: '#FEF3C7' }]}>
@@ -381,34 +378,30 @@ export default function OrderDetailScreen() {
             </View>
             <VStack>
               <Text style={styles.sectionTitle}>УРАМШУУЛЛЫН ОНОО</Text>
-              <Text style={styles.sectionSubtitle}>Нийт: {discountItems.length} ширхэг</Text>
+              <Text style={styles.sectionSubtitle}>
+                Дүн: {parseFloat(order.total_discount_point_amount).toLocaleString()}₮
+              </Text>
             </VStack>
           </HStack>
-          
-          {/* Discount info - not available in delivery API */}
-          <View style={styles.emptyInfo}>
-            <Info size={16} color="#9CA3AF" />
-            <Text style={styles.emptyText}>Энэ захиалгад урамшуулал байхгүй байна</Text>
-          </View>
         </View>
+        )}
 
-        {/* Promo Points Card */}
+        {/* Promo Points Card - only show if has promo */}
+        {order.total_promo_amount && parseFloat(order.total_promo_amount) > 0 && (
         <View style={styles.card}>
           <HStack style={{ alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <View style={[styles.cardIconSmall, { backgroundColor: '#F3E8FF' }]}>
               <Gift size={20} color="#8B5CF6" />
             </View>
             <VStack>
-              <Text style={styles.sectionTitle}>НӨХЦӨЛ БИЕЛСЭН ПРОМО ЖАГСААЛТ</Text>
-              <Text style={styles.sectionSubtitle}>Промо мэдээлэл байхгүй</Text>
+              <Text style={styles.sectionTitle}>ПРОМО ДҮН</Text>
+              <Text style={styles.sectionSubtitle}>
+                Дүн: {parseFloat(order.total_promo_amount).toLocaleString()}₮
+              </Text>
             </VStack>
           </HStack>
-          
-          <View style={styles.emptyInfo}>
-            <Info size={16} color="#9CA3AF" />
-            <Text style={styles.emptyText}>Энэ захиалгад промо мэдээлэл байхгүй байна</Text>
-          </View>
         </View>
+        )}
 
         {/* Checker Type Selector - Нярав/Түгээгч сонголт - зөвхөн warehouse статусуудад */}
         {showCheckingUI && (
@@ -418,10 +411,12 @@ export default function OrderDetailScreen() {
             <TouchableOpacity
               style={[
                 styles.checkerButton,
-                checkerType === 'warehouse' && styles.checkerButtonActiveWarehouse
+                checkerType === 'warehouse' && styles.checkerButtonActiveWarehouse,
+                worker?.department?.id !== 3 && styles.checkerButtonDisabled
               ]}
-              onPress={() => setCheckerType('warehouse')}
-              activeOpacity={0.7}
+              onPress={() => worker?.department?.id === 3 && setCheckerType('warehouse')}
+              activeOpacity={worker?.department?.id === 3 ? 0.7 : 1}
+              disabled={worker?.department?.id !== 3}
             >
               <WarehouseIcon size={18} color={checkerType === 'warehouse' ? '#FFFFFF' : '#2563EB'} />
               <Text style={[
@@ -434,10 +429,12 @@ export default function OrderDetailScreen() {
             <TouchableOpacity
               style={[
                 styles.checkerButton,
-                checkerType === 'driver' && styles.checkerButtonActiveDriver
+                checkerType === 'driver' && styles.checkerButtonActiveDriver,
+                worker?.department?.id === 3 && styles.checkerButtonDisabled
               ]}
-              onPress={() => setCheckerType('driver')}
-              activeOpacity={0.7}
+              onPress={() => worker?.department?.id !== 3 && setCheckerType('driver')}
+              activeOpacity={worker?.department?.id !== 3 ? 0.7 : 1}
+              disabled={worker?.department?.id === 3}
             >
               <Truck size={18} color={checkerType === 'driver' ? '#FFFFFF' : '#e17100'} />
               <Text style={[
@@ -541,38 +538,35 @@ export default function OrderDetailScreen() {
                       styles.productCard,
                       showCheckingUI && isBothChecked && styles.productCardCompleted
                     ]}>
-                      <HStack style={{ gap: 12 }}>
-                        {/* Check Button - зөвхөн warehouse статусуудад */}
-                        {showCheckingUI ? (
-                        <TouchableOpacity
-                          style={[
-                            styles.productCheckBtnLarge,
-                            myChecked && styles.productCheckBtnLargeChecked
-                          ]}
-                          onPress={() => handleProductCheck(product)}
-                          activeOpacity={0.6}
-                        >
-                          {myChecked ? (
-                            <CheckCircle2 size={28} color="#FFFFFF" />
+                      {/* Product Row - like box.tsx */}
+                      <View style={styles.productHeader}>
+                        {/* Product Image */}
+                        <View style={styles.productImageContainer}>
+                          {product.image_url && !failedImages.has(product.product_uuid) ? (
+                            <Image
+                              source={{ uri: transformImageUrl(product.image_url) || '' }}
+                              style={styles.productImage}
+                              resizeMode="cover"
+                              onError={() => setFailedImages(prev => new Set(prev).add(product.product_uuid))}
+                            />
                           ) : (
-                            <Circle size={28} color="#9CA3AF" />
+                            <View style={styles.productImagePlaceholder}>
+                              <Package size={20} color="#9CA3AF" />
+                            </View>
                           )}
-                        </TouchableOpacity>
-                        ) : (
-                          <View style={styles.productIndexBadge}>
-                            <Text style={styles.productIndexText}>{index + 1}</Text>
-                          </View>
-                        )}
+                        </View>
                         
-                        {/* Product Info */}
-                        <VStack style={{ flex: 1 }}>
+                        {/* Product Main Info */}
+                        <View style={styles.productMainInfo}>
+                          {/* Name with index */}
                           <Text style={[styles.productName, showCheckingUI && isBothChecked && styles.textCompleted]} numberOfLines={2}>
-                            {showCheckingUI ? `${index + 1}. ` : ''}{product.name}
+                            <Text style={styles.productIndexInline}>{index + 1}. </Text>
+                            {product.name}
                           </Text>
                           
                           {/* Check Status Row - зөвхөн warehouse статусуудад */}
                           {showCheckingUI && (
-                          <HStack style={{ marginTop: 4, gap: 12 }}>
+                          <View style={styles.checkStatusRow}>
                             <View style={styles.checkStatusItem}>
                               <WarehouseIcon size={11} color={isWarehouseChecked ? "#e17100" : "#9CA3AF"} />
                               <Text style={[styles.checkStatusTextSmall, isWarehouseChecked && styles.checkStatusChecked]}>
@@ -585,27 +579,39 @@ export default function OrderDetailScreen() {
                                 {isDriverChecked ? '✓' : '-'}
                               </Text>
                             </View>
-                          </HStack>
+                          </View>
                           )}
                           
-                          {/* Qty, Price, Total - all in one row */}
-                          <HStack style={{ marginTop: 8, alignItems: 'center', justifyContent: 'space-between' }}>
-                            <HStack style={{ gap: 12 }}>
-                              <HStack style={{ alignItems: 'center', gap: 4 }}>
-                                <Boxes size={12} color="#6B7280" />
-                                <Text style={styles.priceText}>
-                                  {product.quantity}ш
-                                </Text>
-                              </HStack>
-                              <HStack style={{ alignItems: 'center', gap: 4 }}>
-                                <Banknote size={12} color="#6B7280" />
-                                <Text style={styles.priceText}>{product.price}₮</Text>
-                              </HStack>
-                            </HStack>
+                          {/* Qty, Price, Total */}
+                          <View style={styles.productPriceRow}>
+                            <View style={styles.productPriceLeft}>
+                              <Boxes size={12} color="#6B7280" />
+                              <Text style={styles.priceText}>{product.quantity}ш</Text>
+                              <Banknote size={12} color="#6B7280" style={{ marginLeft: 8 }} />
+                              <Text style={styles.priceText}>{product.price}₮</Text>
+                            </View>
                             <Text style={styles.productTotalText}>Нийт: {formatAmount(calculateProductTotal(product))}</Text>
-                          </HStack>
-                        </VStack>
-                      </HStack>
+                          </View>
+                        </View>
+                        
+                        {/* Check Button - баруун талд */}
+                        {showCheckingUI && (
+                        <TouchableOpacity
+                          style={[
+                            styles.productCheckBtnSmall,
+                            myChecked && styles.productCheckBtnSmallChecked
+                          ]}
+                          onPress={() => handleProductCheck(product)}
+                          activeOpacity={0.6}
+                        >
+                          {myChecked ? (
+                            <CheckCircle2 size={22} color="#FFFFFF" />
+                          ) : (
+                            <Circle size={22} color="#9CA3AF" />
+                          )}
+                        </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   );
                 })}
@@ -700,8 +706,9 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Bottom Notice */}
-        {(discountItems.length > 0 || hasPromotions) && (
+        {/* Bottom Notice - only show if has discount or promo */}
+        {((order.total_discount_point_amount && parseFloat(order.total_discount_point_amount) > 0) || 
+          (order.total_promo_amount && parseFloat(order.total_promo_amount) > 0)) && (
           <View style={styles.bottomNotice}>
             <Info size={18} color="#F59E0B" />
             <Text style={styles.bottomNoticeText}>
@@ -1071,19 +1078,63 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  productImage: {
+  productHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+  },
+  productImageContainer: {
     width: 56,
     height: 56,
     borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: 10,
+  },
+  productImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
     backgroundColor: '#F3F4F6',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+  },
+  productMainInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  productIndexInline: {
+    fontSize: 13,
+    fontFamily: 'GIP-Bold',
+    color: '#6B7280',
   },
   productName: {
     fontSize: 13,
     fontFamily: 'GIP-SemiBold',
     color: '#111827',
     lineHeight: 18,
+  },
+  checkStatusRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    marginTop: 4,
+  },
+  productPriceRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginTop: 6,
+  },
+  productPriceLeft: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
   },
   priceIcon: {
     fontSize: 11,
@@ -1248,6 +1299,17 @@ const styles = StyleSheet.create({
   productCheckBtnChecked: {
     backgroundColor: '#e17100',
   },
+  productCheckBtnSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productCheckBtnSmallChecked: {
+    backgroundColor: '#e17100',
+  },
   productCheckBtnLarge: {
     width: 48,
     height: 48,
@@ -1260,15 +1322,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#e17100',
   },
   productIndexBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#2563EB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   productIndexText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'GIP-Bold',
     color: '#FFFFFF',
   },
@@ -1350,6 +1412,9 @@ const styles = StyleSheet.create({
   checkerButtonActiveDriver: {
     backgroundColor: '#e17100',
     borderColor: '#e17100',
+  },
+  checkerButtonDisabled: {
+    opacity: 0.4,
   },
   checkerButtonText: {
     fontSize: 14,

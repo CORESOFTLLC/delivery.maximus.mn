@@ -14,8 +14,11 @@ export default function PackageLayout() {
         },
         headerTintColor: '#1F2937',
         headerShadowVisible: false,
-        headerBackVisible: false,
+        headerBackVisible: true,
       }}
-    />
+    >
+      {/* [id] folder has its own nested Stack, so hide this level's header */}
+      <Stack.Screen name="[id]" options={{ headerShown: false }} />
+    </Stack>
   );
 }

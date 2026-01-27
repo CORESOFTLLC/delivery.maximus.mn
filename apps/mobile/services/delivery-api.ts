@@ -86,6 +86,13 @@ import { useAuthStore } from '../stores/delivery-auth-store';
 
 const API_BASE_URL = 'http://cloud.local.maximus.mn/api/delivery';
 
+// Transform image URLs from HTTPS .test domain to HTTP
+export const transformImageUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  // Replace https://cloud.local.maximus.mn.test with http://cloud.local.maximus.mn
+  return url.replace('https://cloud.local.maximus.mn.test', 'http://cloud.local.maximus.mn');
+};
+
 // ==========================================================================
 // TYPES - Өгөгдлийн төрлүүд
 // ==========================================================================
@@ -151,7 +158,9 @@ export interface OrderProduct {
   id: number;
   product_uuid: string;
   name: string;
+  article: string | null;
   barcode: string | null;
+  image_url: string | null;
   quantity: number;
   price: string;
   auto_sale: string;
@@ -418,6 +427,7 @@ export interface AggregatedProduct {
   article: string | null;
   brand: string | null;
   brand_name: string | null;
+  image_url: string | null;
   serial_number: string | null;
   has_serial: boolean;
   unit_price: string;

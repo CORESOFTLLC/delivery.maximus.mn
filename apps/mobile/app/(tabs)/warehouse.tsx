@@ -33,9 +33,12 @@ export default function WarehouseScreen() {
       const result = await getWorkerPackages(worker?.id);
       
       if (result.success && result.data) {
-        // Show all packages (no filter) - let user see full list
-        // Packages with warehouse_pending > 0 need checking
-        setPackages(result.data.packages);
+        // Filter only packages with warehouse_pending > 0
+        // Packages that need warehouse checking (Агуулах section only)
+        const warehousePackages = result.data.packages.filter(
+          pkg => pkg.warehouse_pending > 0
+        );
+        setPackages(warehousePackages);
       } else {
         Alert.alert('Алдаа', result.message || 'Багц татахад алдаа гарлаа');
       }
@@ -104,7 +107,7 @@ export default function WarehouseScreen() {
           <Text style={styles.dateText}>{item.formatted_date}</Text>
         </View>
 
-        {/* Stats Grid */}
+        {/* Stats Grid - Warehouse only shows Нийт and Тулгах */}
         <View style={styles.statsGrid}>
           <View style={styles.statBox}>
             <Box size={18} color="#3B82F6" />
@@ -118,16 +121,12 @@ export default function WarehouseScreen() {
             <Text style={styles.statLabel}>Тулгах</Text>
           </View>
 
-          <View style={styles.statBox}>
-            <Truck size={18} color="#8B5CF6" />
-            <Text style={styles.statValue}>{item.delivery_pending}</Text>
-            <Text style={styles.statLabel}>Хүргэлт</Text>
-          </View>
-
-          <View style={styles.statBox}>
+          <View style={[styles.statBox, styles.statBoxCompleted]}>
             <CheckCircle2 size={18} color="#10B981" />
-            <Text style={styles.statValue}>{item.delivered}</Text>
-            <Text style={styles.statLabel}>Хүргэсэн</Text>
+            <Text style={[styles.statValue, styles.statValueCompleted]}>
+              {item.total_orders - item.warehouse_pending}
+            </Text>
+            <Text style={styles.statLabel}>Тулгасан</Text>
           </View>
         </View>
 
@@ -337,11 +336,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  statBoxCompleted: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    paddingVertical: 8,
+    marginHorizontal: 4,
+  },
   statValue: {
     fontSize: 18,
     fontFamily: 'GIP-Bold',
     color: '#1F2937',
     marginTop: 4,
+  },
+  statValueCompleted: {
+    color: '#059669',
   },
   statLabel: {
     fontSize: 11,

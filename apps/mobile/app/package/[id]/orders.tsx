@@ -38,7 +38,7 @@ import * as Location from 'expo-location';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import { getPackageOrders, DeliveryOrder, PackageOrdersData, optimizeRoute } from '../../../services/delivery-api';
 
-// Warehouse related statuses
+// Warehouse related statuses - Агуулах хэсэгт харагдах төлөвүүд
 const WAREHOUSE_STATUSES = 'assigned_to_driver,warehouse_checking,warehouse_checked,driver_checking';
 
 type FilterStatus = 'assigned_to_driver' | 'warehouse_checking' | 'warehouse_checked' | 'driver_checking';
@@ -198,9 +198,9 @@ export default function PackageOrdersScreen() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'assigned_to_driver': return 'Хүлээгдэж';
-      case 'warehouse_checking': return 'Шалгаж байна';
-      case 'warehouse_checked': return 'Шалгасан';
-      case 'driver_checking': return 'Тулгаж байна';
+      case 'warehouse_checking': return 'Нярав шалгаж буй';
+      case 'warehouse_checked': return 'Нярав шалгасан';
+      case 'driver_checking': return 'Түгээгч тулгаж буй';
       case 'loaded': return 'Ачигдсан';
       default: return status;
     }
@@ -460,11 +460,11 @@ export default function PackageOrdersScreen() {
               <View style={styles.filterGrid}>
                 <View style={styles.filterRow}>
                   {renderFilterButton('assigned_to_driver', 'Хүлээгдэж', <Circle size={16} color={filterStatus === 'assigned_to_driver' ? '#F59E0B' : '#6B7280'} />)}
-                  {renderFilterButton('warehouse_checked', 'Шалгасан', <ClipboardCheck size={16} color={filterStatus === 'warehouse_checked' ? '#8B5CF6' : '#6B7280'} />)}
+                  {renderFilterButton('warehouse_checked', 'Нярав шалгасан', <ClipboardCheck size={16} color={filterStatus === 'warehouse_checked' ? '#8B5CF6' : '#6B7280'} />)}
                 </View>
                 <View style={styles.filterRow}>
-                  {renderFilterButton('warehouse_checking', 'Шалгаж буй', <Eye size={16} color={filterStatus === 'warehouse_checking' ? '#3B82F6' : '#6B7280'} />)}
-                  {renderFilterButton('driver_checking', 'Тулгаж', <Eye size={16} color={filterStatus === 'driver_checking' ? '#f59e0b' : '#6B7280'} />)}
+                  {renderFilterButton('warehouse_checking', 'Нярав шалгаж буй', <Eye size={16} color={filterStatus === 'warehouse_checking' ? '#3B82F6' : '#6B7280'} />)}
+                  {renderFilterButton('driver_checking', 'Түгээгч тулгаж буй', <Eye size={16} color={filterStatus === 'driver_checking' ? '#10B981' : '#6B7280'} />)}
                 </View>
               </View>
 
@@ -477,14 +477,16 @@ export default function PackageOrdersScreen() {
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>
-                    {(data?.status_counts.warehouse_checking || 0) + (data?.status_counts.warehouse_checked || 0)}
+                    {(data?.status_counts.warehouse_checking || 0) + (data?.status_counts.warehouse_checked || 0) + (data?.status_counts.driver_checking || 0)}
                   </Text>
-                  <Text style={styles.statLabel}>Шалгасан</Text>
+                  <Text style={styles.statLabel}>Нярав</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{data?.status_counts.driver_checking || 0}</Text>
-                  <Text style={styles.statLabel}>Тулгаж</Text>
+                  <Text style={styles.statValue}>
+                    {data?.status_counts.driver_checking || 0}
+                  </Text>
+                  <Text style={styles.statLabel}>Түгээгч</Text>
                 </View>
               </View>
             </>
@@ -666,14 +668,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
   orderCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -725,14 +727,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   customerNameContainer: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 6,
   },
   customerNamePrimary: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'GIP-Bold',
     color: '#1F2937',
   },
@@ -757,10 +759,10 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-SemiBold',
   },
   orderBody: {
-    marginTop: 4,
+    marginTop: 2,
   },
   customerAddress: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'GIP-Regular',
     color: '#6B7280',
     marginTop: 2,
@@ -810,21 +812,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    gap: 20,
-    marginTop: 12,
-    paddingTop: 12,
+    gap: 16,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
   circleProgressContainer: {
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   circleProgress: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
@@ -848,7 +850,7 @@ const styles = StyleSheet.create({
     borderColor: '#e17100',
   },
   circleProgressPercent: {
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: 'GIP-Bold',
     color: '#374151',
   },
@@ -870,10 +872,10 @@ const styles = StyleSheet.create({
   circleProgressLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   circleProgressLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'GIP-Medium',
     color: '#6B7280',
   },
@@ -886,22 +888,22 @@ const styles = StyleSheet.create({
   locationActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
+    marginTop: 6,
   },
   w3wButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF1F2',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
     gap: 4,
     borderWidth: 1,
     borderColor: '#FECDD3',
   },
   w3wText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'GIP-Medium',
     color: '#E11D48',
   },

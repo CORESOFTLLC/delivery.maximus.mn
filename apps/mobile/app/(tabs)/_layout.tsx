@@ -8,7 +8,7 @@ import { useAuthStore } from '../../stores/delivery-auth-store';
 
 // Drawer Menu Component
 function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { user, logout } = useAuthStore();
+  const { worker, logout } = useAuthStore();
   const router = useRouter();
   const [deviceId, setDeviceId] = useState<string>('');
 
@@ -55,23 +55,18 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
     );
   };
 
-  // Get initials from user name
+  // Get initials from worker name
   const userInitials = useMemo(() => {
-    const name = user?.name || 'Хэрэглэгч';
+    const name = worker?.name || 'Хэрэглэгч';
     const words = name.trim().split(' ');
     if (words.length >= 2) {
       return (words[0][0] + words[1][0]).toUpperCase();
     }
     return name.slice(0, 2).toUpperCase();
-  }, [user?.name]);
+  }, [worker?.name]);
 
-  // Worker type label
-  const workerTypeLabel = useMemo(() => {
-    const type = user?.worker_type;
-    if (type === 'driver') return 'Жолооч';
-    if (type === 'warehouse') return 'Нярав';
-    return 'Ажилтан';
-  }, [user?.worker_type]);
+  // Worker type label from API
+  const workerTypeLabel = worker?.worker_type_label || 'Ажилтан';
 
   // Early return AFTER all hooks
   if (!isOpen) return null;
@@ -85,8 +80,8 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
           <View style={styles.headerRow}>
             {/* Avatar */}
             <View style={styles.avatarContainer}>
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+              {worker?.avatar ? (
+                <Image source={{ uri: worker.avatar }} style={styles.avatarImage} />
               ) : (
                 <RNText style={styles.avatarInitials}>{userInitials}</RNText>
               )}
@@ -94,16 +89,31 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             {/* User Info */}
             <View style={styles.userInfo}>
               <RNText style={styles.drawerUserName} numberOfLines={1}>
-                {user?.name || 'Хэрэглэгч'}
+                {worker?.name || 'Хэрэглэгч'}
               </RNText>
+              {/* Department & Job */}
+              {worker?.department && (
+                <RNText style={styles.departmentText} numberOfLines={1}>
+                  {worker.department.name}
+                </RNText>
+              )}
               <View style={styles.workerBadge}>
-                <RNText style={styles.workerBadgeText}>{workerTypeLabel}</RNText>
+                <RNText style={styles.workerBadgeText}>
+                  {worker?.job?.name || workerTypeLabel}
+                </RNText>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={22} color="#6B7280" />
             </TouchableOpacity>
           </View>
+          {/* Employee Code */}
+          {worker?.employee_code && (
+            <View style={styles.employeeCodeRow}>
+              <RNText style={styles.employeeCodeLabel}>Ажилтны код:</RNText>
+              <RNText style={styles.employeeCodeValue}>{worker.employee_code}</RNText>
+            </View>
+          )}
         </View>
 
         {/* Menu Items */}
@@ -375,6 +385,12 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Bold',
     color: '#111827',
   },
+  departmentText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#6B7280',
+    marginTop: 2,
+  },
   workerBadge: {
     marginTop: 4,
     backgroundColor: '#DBEAFE',
@@ -387,6 +403,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'GIP-SemiBold',
     color: '#2563EB',
+  },
+  employeeCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  employeeCodeLabel: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#9CA3AF',
+  },
+  employeeCodeValue: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
+    marginLeft: 8,
   },
   closeButton: {
     width: 36,

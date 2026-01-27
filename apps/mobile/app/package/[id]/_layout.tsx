@@ -14,7 +14,7 @@ export default function PackageIdLayout() {
         },
         headerTintColor: '#1F2937',
         headerShadowVisible: false,
-        headerBackVisible: false,
+        headerBackVisible: true,
       }}
     />
   );

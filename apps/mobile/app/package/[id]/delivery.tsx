@@ -206,8 +206,8 @@ export default function PackageDeliveryScreen() {
     Linking.openURL(url);
   };
 
-  const filteredOrders = data?.orders.filter((order) => {
-    return order.delivery_status === filterStatus;
+  const filteredOrders = data?.orders?.filter((order) => {
+    return order && order.delivery_status === filterStatus;
   }) || [];
 
   const getStatusColor = (status: string) => {
@@ -244,6 +244,11 @@ export default function PackageDeliveryScreen() {
   };
 
   const renderOrderItem = ({ item: order, index }: { item: DeliveryOrder; index: number }) => {
+    // Safety check for null/undefined order
+    if (!order) {
+      return null;
+    }
+    
     // Check if order is locked (delivered with confirmed eBarimt)
     const isLocked = order.delivery_status === 'delivered' && order.ebarimt_status === 'SUCCESS';
     
@@ -417,22 +422,6 @@ export default function PackageDeliveryScreen() {
             <Text style={styles.summaryLabel}>Амжилтгүй</Text>
           </View>
         </View>
-        
-        {/* Optimize Route Button */}
-        <TouchableOpacity
-          style={styles.optimizeButton}
-          onPress={handleOptimizeRoute}
-          disabled={optimizing}
-        >
-          {optimizing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Route size={18} color="#FFFFFF" />
-              <Text style={styles.optimizeButtonText}>Маршрут оновчлох</Text>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}

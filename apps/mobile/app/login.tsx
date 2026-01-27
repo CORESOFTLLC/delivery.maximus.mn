@@ -7,9 +7,11 @@ import {
   TextInput, 
   TouchableOpacity, 
   StyleSheet, 
-  Alert 
+  Alert,
+  Switch,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { AlertCircle, Smartphone, Copy, Lock, Hash } from 'lucide-react-native';
 import * as Application from 'expo-application';
@@ -36,9 +38,35 @@ export default function LoginScreen() {
   const [pin, setPin] = useState(['', '', '', '', '', '', '', '']); // 8 digits
   const [formErrors, setFormErrors] = useState<{ code?: string; pin?: string }>({});
   const [deviceId, setDeviceId] = useState<string>('');
+  const [rememberMe, setRememberMe] = useState(false);
   
   // Refs for PIN inputs
   const pinRefs = useRef<(TextInput | null)[]>([]);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const savedCredentials = await AsyncStorage.getItem('delivery-saved-credentials');
+        if (savedCredentials) {
+          const { employeeCode: savedCode, pin: savedPin, rememberMe: savedRemember } = JSON.parse(savedCredentials);
+          if (savedRemember && savedCode) {
+            setEmployeeCode(savedCode);
+            setRememberMe(true);
+            if (savedPin) {
+              // Convert saved PIN string to array
+              const pinArray = savedPin.split('').slice(0, 8);
+              while (pinArray.length < 8) pinArray.push('');
+              setPin(pinArray);
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Failed to load saved credentials:', error);
+      }
+    };
+    loadSavedCredentials();
+  }, []);
 
   useEffect(() => {
     const getDeviceId = async () => {
@@ -110,6 +138,21 @@ export default function LoginScreen() {
     console.log('Login result:', success);
 
     if (success) {
+      // Save or clear credentials based on rememberMe
+      try {
+        if (rememberMe) {
+          await AsyncStorage.setItem('delivery-saved-credentials', JSON.stringify({
+            employeeCode: employeeCode.trim(),
+            pin: pinValue,
+            rememberMe: true,
+          }));
+        } else {
+          await AsyncStorage.removeItem('delivery-saved-credentials');
+        }
+      } catch (error) {
+        console.log('Failed to save credentials:', error);
+      }
+      
       router.replace('/(tabs)/warehouse');
     }
   };
@@ -194,9 +237,7 @@ export default function LoginScreen() {
                       <Text size="xs" className="text-error-600">{formErrors.code}</Text>
                     </HStack>
                   )}
-                  <Text size="xs" className="text-typography-400 mt-1">
-                    Формат: [Алба 2 орон][Он 2 орон][Дугаар 4 орон]
-                  </Text>
+
                 </View>
 
                 {/* PIN Input - 8 digits */}
@@ -238,14 +279,22 @@ export default function LoginScreen() {
                       <Text size="xs" className="text-error-600">{formErrors.pin}</Text>
                     </HStack>
                   )}
-                  
-                  <HStack space="xs" className="items-center mt-2">
-                    <Lock size={14} color="#9CA3AF" />
-                    <Text size="xs" className="text-typography-400">
-                      HR системээс олгосон 8 оронтой PIN код
-                    </Text>
-                  </HStack>
+
                 </View>
+
+                {/* Remember Me Toggle */}
+                <HStack className="justify-between items-center">
+                  <Text size="sm" className="text-typography-700">
+                    Нэвтрэх мэдээлэл хадгалах
+                  </Text>
+                  <Switch
+                    value={rememberMe}
+                    onValueChange={setRememberMe}
+                    trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+                    thumbColor={rememberMe ? '#2563EB' : '#F3F4F6'}
+                    ios_backgroundColor="#D1D5DB"
+                  />
+                </HStack>
               </VStack>
 
               {/* Login Button */}

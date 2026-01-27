@@ -11,6 +11,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_BASE_URL = 'http://cloud.local.maximus.mn/api/delivery';
 
 // Worker types
+export interface Department {
+  id: number;
+  name: string;
+}
+
+export interface Job {
+  id: number;
+  name: string;
+}
+
 export interface Worker {
   id: number;
   employee_code: string;
@@ -20,6 +30,8 @@ export interface Worker {
   worker_type: 'driver' | 'deliverer' | 'helper' | 'other';
   worker_type_label: string;
   is_available?: boolean;
+  department?: Department | null;
+  job?: Job | null;
 }
 
 export interface Car {

@@ -36,7 +36,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import { getPackageOrders, PackageOrdersData, getPackageProducts, PackageProductsSummary, completePackageChecking } from '../../../services/delivery-api';
 
-// Warehouse related statuses
+// Warehouse related statuses - Агуулах хэсэгт харагдах төлөвүүд
 const WAREHOUSE_STATUSES = 'assigned_to_driver,warehouse_checking,warehouse_checked,driver_checking';
 
 export default function PackageCheckingMethodScreen() {
@@ -86,14 +86,20 @@ export default function PackageCheckingMethodScreen() {
     fetchPackageInfo();
   }, [fetchPackageInfo]);
 
-  // Check if all products are fully checked (by driver)
-  const isFullyChecked = productsSummary && 
-    productsSummary.total_quantity > 0 && 
-    productsSummary.driver_checked_quantity >= productsSummary.total_quantity;
+  // Check if all products are fully checked (both warehouse AND driver must be 100%)
+  const warehouseProgress = productsSummary && productsSummary.total_quantity > 0
+    ? Math.round((productsSummary.warehouse_checked_quantity / productsSummary.total_quantity) * 100)
+    : 0;
   
-  const checkProgress = productsSummary && productsSummary.total_quantity > 0
+  const driverProgress = productsSummary && productsSummary.total_quantity > 0
     ? Math.round((productsSummary.driver_checked_quantity / productsSummary.total_quantity) * 100)
     : 0;
+  
+  // Both must be 100% for fully checked
+  const isFullyChecked = warehouseProgress >= 100 && driverProgress >= 100;
+  
+  // Show the minimum of the two (e.g. if warehouse is 100% but driver is 50%, show 50%)
+  const checkProgress = Math.min(warehouseProgress, driverProgress);
 
   // Handle complete checking - move to LOADED status
   const handleCompleteChecking = async (force: boolean = false) => {
@@ -180,10 +186,13 @@ export default function PackageCheckingMethodScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-        <ActivityIndicator size="large" color="#2563EB" />
-        <Text style={styles.loadingText}>Уншиж байна...</Text>
-      </SafeAreaView>
+      <>
+        <Stack.Screen options={{ title: 'Барааны тулгалт сонгох' }} />
+        <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.loadingText}>Уншиж байна...</Text>
+        </SafeAreaView>
+      </>
     );
   }
 
@@ -191,7 +200,7 @@ export default function PackageCheckingMethodScreen() {
     <>
       <Stack.Screen 
         options={{
-          title: 'Тулгалтын арга сонгох',
+          title: 'Барааны тулгалт сонгох',
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 8 }}>
               <ArrowLeft size={24} color="#1F2937" />
@@ -206,7 +215,7 @@ export default function PackageCheckingMethodScreen() {
           <View style={styles.packageHeader}>
             <View style={styles.packageTitleRow}>
               <Calendar size={20} color="#2563EB" />
-              <Text style={styles.packageTitle}>Багц: {data.package.name}</Text>
+              <Text style={styles.packageTitle}>Багцын дугаар: {data.package.name}</Text>
             </View>
             <View style={styles.packageInfoRow}>
               <Text style={styles.packageDate}>{data.package.formatted_date}</Text>
@@ -374,12 +383,14 @@ export default function PackageCheckingMethodScreen() {
               </View>
               <View style={[styles.orderStatBadge, styles.orderStatBadgeBlue]}>
                 <Text style={[styles.orderStatValue, styles.orderStatValueBlue]}>
-                  {(data.status_counts.warehouse_checking || 0) + (data.status_counts.warehouse_checked || 0)}
+                  {(data.status_counts.warehouse_checking || 0) + (data.status_counts.warehouse_checked || 0) + (data.status_counts.driver_checking || 0)}
                 </Text>
                 <Text style={styles.orderStatLabel}>Нярав</Text>
               </View>
               <View style={[styles.orderStatBadge, styles.orderStatBadgeGreen]}>
-                <Text style={[styles.orderStatValue, styles.orderStatValueGreen]}>{data.status_counts.driver_checking || 0}</Text>
+                <Text style={[styles.orderStatValue, styles.orderStatValueGreen]}>
+                  {data.status_counts.driver_checking || 0}
+                </Text>
                 <Text style={styles.orderStatLabel}>Түгээгч</Text>
               </View>
             </View>
@@ -392,7 +403,7 @@ export default function PackageCheckingMethodScreen() {
             <TouchableOpacity
               style={[
                 styles.completeButton,
-                isFullyChecked && styles.completeButtonReady,
+                isFullyChecked ? styles.completeButtonReady : styles.completeButtonNotReady,
                 completing && styles.completeButtonDisabled,
               ]}
               onPress={() => handleCompleteChecking(false)}
@@ -411,7 +422,7 @@ export default function PackageCheckingMethodScreen() {
                     <Text style={styles.completeButtonSubtext}>
                       {isFullyChecked 
                         ? '✓ Бүх бараа тулгагдсан'
-                        : `${checkProgress}% тулгагдсан`
+                        : `Нярав: ${warehouseProgress}% | Түгээгч: ${driverProgress}%`
                       }
                     </Text>
                   </View>
@@ -726,16 +737,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#9CA3AF',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
     gap: 12,
-    shadowColor: '#F59E0B',
+    shadowColor: '#9CA3AF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  completeButtonNotReady: {
+    backgroundColor: '#9CA3AF',
+    shadowColor: '#9CA3AF',
   },
   completeButtonReady: {
     backgroundColor: '#e17100',

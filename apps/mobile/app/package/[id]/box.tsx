@@ -19,6 +19,7 @@ import {
   SectionList,
   Modal,
   Pressable,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { 
@@ -43,8 +44,10 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import { getPackageProducts, toggleProductCheck, AggregatedProduct, PackageProductsData } from '../../../services/delivery-api';
 
-// Polling interval for realtime updates (1 second for instant sync)
-const POLLING_INTERVAL = 1000;
+// Polling interval for realtime updates (3 seconds - balanced between sync and performance)
+const POLLING_INTERVAL = 3000;
+// Delay after check action before polling resumes (prevents flicker)
+const POST_CHECK_DELAY = 1500;
 
 // Warehouse related statuses
 const WAREHOUSE_STATUSES = 'assigned_to_driver,warehouse_checking,warehouse_checked,driver_checking';
@@ -78,12 +81,19 @@ export default function PackageBoxCheckingScreen() {
   const [sortOption, setSortOption] = useState<SortOption>('brand');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [checkingProducts, setCheckingProducts] = useState<Set<string>>(new Set()); // Products being checked
+  const [lastCheckTime, setLastCheckTime] = useState(0); // Track last check action time
 
-  // Determine checker type based on worker type
-  // For now, all delivery workers are 'driver' type checker
-  // Warehouse staff would use a different app/interface
-  // TODO: Add setting to switch between warehouse/driver mode for testing
+  // Department id=3 бол warehouse (нярав), бусад бол driver (түгээгч)
   const [checkerType, setCheckerType] = useState<'warehouse' | 'driver'>('driver');
+  
+  // Worker department өөрчлөгдөхөд checkerType шинэчлэх
+  useEffect(() => {
+    if (worker?.department?.id === 3) {
+      setCheckerType('warehouse');
+    } else {
+      setCheckerType('driver');
+    }
+  }, [worker?.department?.id]);
 
   const fetchProducts = useCallback(async () => {
     if (!id) return;
@@ -112,6 +122,12 @@ export default function PackageBoxCheckingScreen() {
   const silentRefresh = useCallback(async () => {
     if (!id) return;
     
+    // Skip polling if recent check action (prevents flicker)
+    const timeSinceLastCheck = Date.now() - lastCheckTime;
+    if (timeSinceLastCheck < POST_CHECK_DELAY) {
+      return;
+    }
+    
     try {
       const result = await getPackageProducts({
         packageId: parseInt(id),
@@ -125,7 +141,7 @@ export default function PackageBoxCheckingScreen() {
     } catch (error) {
       // Silent fail for polling
     }
-  }, [id, worker?.id]);
+  }, [id, worker?.id, lastCheckTime]);
 
   // Initial fetch
   useEffect(() => {
@@ -215,8 +231,10 @@ export default function PackageBoxCheckingScreen() {
       };
     });
     
-    // Fire-and-forget API calls - don't wait, polling will sync
-    // Using Promise.allSettled so one failure doesn't block others
+    // Mark last check time to prevent polling from overwriting optimistic update
+    setLastCheckTime(Date.now());
+    
+    // Fire-and-forget API calls - polling will sync after delay
     Promise.allSettled(
       item.order_details.map(detail => 
         toggleProductCheck({
@@ -228,10 +246,10 @@ export default function PackageBoxCheckingScreen() {
         })
       )
     ).then(results => {
-      const failures = results.filter(r => r.status === 'rejected');
+      const failures = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
       if (failures.length > 0) {
-        // Some failed, refetch to get accurate state
-        fetchProducts();
+        // Some failed, refetch to get accurate state after delay
+        setTimeout(() => fetchProducts(), POST_CHECK_DELAY);
       }
     });
     
@@ -343,14 +361,19 @@ export default function PackageBoxCheckingScreen() {
       ]}>
         {/* Product Row */}
         <View style={styles.productHeader}>
-          <View style={[
-            styles.productIndexBadge,
-            isBothFullyChecked && styles.productIndexBadgeCompleted
-          ]}>
-            <Text style={[
-              styles.productIndexText,
-              isBothFullyChecked && styles.productIndexTextCompleted
-            ]}>{index + 1}</Text>
+          {/* Product Image */}
+          <View style={styles.productImageContainer}>
+            {item.image_url ? (
+              <Image
+                source={{ uri: item.image_url.replace('https://cloud.local.maximus.mn.test', 'http://cloud.local.maximus.mn') }}
+                style={styles.productImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.productImagePlaceholder}>
+                <Package size={20} color="#9CA3AF" />
+              </View>
+            )}
           </View>
           
           <View style={styles.productMainInfo}>
@@ -647,14 +670,16 @@ export default function PackageBoxCheckingScreen() {
                   
                   {/* Dual Progress Bars - Warehouse & Driver */}
                   <View style={styles.dualProgressContainer}>
-                    {/* Warehouse Progress - Clickable to switch */}
+                    {/* Warehouse Progress - Clickable only for warehouse staff (department id=3) */}
                     <TouchableOpacity 
                       style={[
                         styles.dualProgressItem,
-                        checkerType === 'warehouse' && styles.dualProgressItemActive
+                        checkerType === 'warehouse' && styles.dualProgressItemActive,
+                        worker?.department?.id !== 3 && styles.dualProgressItemDisabled
                       ]}
-                      onPress={() => setCheckerType('warehouse')}
-                      activeOpacity={0.7}
+                      onPress={() => worker?.department?.id === 3 && setCheckerType('warehouse')}
+                      activeOpacity={worker?.department?.id === 3 ? 0.7 : 1}
+                      disabled={worker?.department?.id !== 3}
                     >
                       <View style={styles.dualProgressHeader}>
                         <Text style={[
@@ -685,14 +710,16 @@ export default function PackageBoxCheckingScreen() {
                       </Text>
                     </TouchableOpacity>
                     
-                    {/* Driver Progress - Clickable to switch */}
+                    {/* Driver Progress - Clickable only for non-warehouse staff */}
                     <TouchableOpacity 
                       style={[
                         styles.dualProgressItem,
-                        checkerType === 'driver' && styles.dualProgressItemActive
+                        checkerType === 'driver' && styles.dualProgressItemActive,
+                        worker?.department?.id === 3 && styles.dualProgressItemDisabled
                       ]}
-                      onPress={() => setCheckerType('driver')}
-                      activeOpacity={0.7}
+                      onPress={() => worker?.department?.id !== 3 && setCheckerType('driver')}
+                      activeOpacity={worker?.department?.id !== 3 ? 0.7 : 1}
+                      disabled={worker?.department?.id === 3}
                     >
                       <View style={styles.dualProgressHeader}>
                         <Text style={[
@@ -850,6 +877,9 @@ const styles = StyleSheet.create({
   dualProgressItemActive: {
     borderColor: '#2563EB',
     backgroundColor: '#EFF6FF',
+  },
+  dualProgressItemDisabled: {
+    opacity: 0.5,
   },
   dualProgressHeader: {
     flexDirection: 'row',
@@ -1009,7 +1039,7 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
   },
   listContent: {
-    paddingBottom: 16,
+    paddingBottom: 80,
   },
   productCard: {
     backgroundColor: '#FFFFFF',
@@ -1024,6 +1054,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 10,
     alignItems: 'flex-start',
+  },
+  productImageContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
   },
   productIndexBadge: {
     width: 24,
