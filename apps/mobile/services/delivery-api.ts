@@ -207,7 +207,45 @@ export interface TodayStats {
 }
 
 /**
- * Today Report Data - Өнөөдрийн тайлан
+ * Return Item — Буцаалтын бараа
+ */
+export interface ReturnItem {
+  order_code: string;
+  customer_name: string;
+  product_name: string;
+  ordered_quantity: number;
+  delivered_quantity: number;
+  returned_quantity: number;
+  return_amount: number;
+  notes?: string;
+}
+
+/**
+ * Returns Summary — Буцаалтын нэгтгэл
+ */
+export interface ReturnsSummary {
+  total_return_orders: number;
+  total_return_products: number;
+  total_return_quantity: number;
+  total_return_amount: number;
+  return_items: ReturnItem[];
+}
+
+/**
+ * Package Summary — Багцын нэгтгэл
+ */
+export interface PackageSummary {
+  id: number;
+  name: string;
+  delivery_date: string;
+  total_orders: number;
+  delivered: number;
+  total_amount: number;
+  delivered_amount: number;
+}
+
+/**
+ * Today Report Data - Хүргэлтийн тайлан
  */
 export interface TodayReportData {
   total_orders: number;
@@ -217,9 +255,18 @@ export interface TodayReportData {
   failed: number;
   total_amount: number;
   delivered_amount: number;
+  remaining_amount: number;
   cash_amount: number;
   card_amount: number;
+  qpay_amount: number;
+  transfer_amount: number;
+  loan_amount: number;
+  other_payment_amount: number;
+  collected_amount: number;
+  uncollected_amount: number;
   avg_delivery_minutes?: number;
+  returns: ReturnsSummary;
+  packages: PackageSummary[];
 }
 
 export interface WorkerProfile {
@@ -1203,6 +1250,11 @@ export async function getDeliveryStatuses(): Promise<{ success: boolean; data?: 
  * - Төлбөрийн мэдээлэл
  * - Дундаж хүргэлтийн хугацаа
  */
-export async function getTodayReport(): Promise<{ success: boolean; data?: TodayReportData; message?: string }> {
-  return apiRequest('/worker/today-report');
+export async function getTodayReport(params?: { date?: string; from?: string; to?: string }): Promise<{ success: boolean; data?: TodayReportData; message?: string }> {
+  const query = new URLSearchParams();
+  if (params?.date) query.set('date', params.date);
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  const qs = query.toString();
+  return apiRequest(`/worker/today-report${qs ? `?${qs}` : ''}`);
 }
