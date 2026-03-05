@@ -24,7 +24,6 @@ import {
   Calendar, 
   ArrowLeft,
   Circle,
-  ClipboardCheck,
   Eye,
   CheckCircle2,
   MapPin,
@@ -38,10 +37,7 @@ import * as Location from 'expo-location';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import { getPackageOrders, DeliveryOrder, PackageOrdersData, optimizeRoute } from '../../../services/delivery-api';
 
-// Warehouse related statuses - Агуулах хэсэгт харагдах төлөвүүд
-const WAREHOUSE_STATUSES = 'assigned_to_driver,warehouse_checking,warehouse_checked,driver_checking';
-
-type FilterStatus = 'assigned_to_driver' | 'warehouse_checking' | 'warehouse_checked' | 'driver_checking';
+type FilterStatus = 'all' | 'assigned_to_driver' | 'warehouse_checking' | 'warehouse_checked' | 'driver_checking';
 
 export default function PackageOrdersScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,7 +46,7 @@ export default function PackageOrdersScreen() {
   const [data, setData] = useState<PackageOrdersData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('assigned_to_driver');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [optimizing, setOptimizing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -108,7 +104,6 @@ export default function PackageOrdersScreen() {
       const result = await getPackageOrders({
         packageId: parseInt(id),
         workerId: worker?.id,
-        status: WAREHOUSE_STATUSES,
         startLatitude: location?.latitude,
         startLongitude: location?.longitude,
       });
@@ -180,9 +175,11 @@ export default function PackageOrdersScreen() {
     );
   };
 
-  const filteredOrders = data?.orders.filter((order) => {
-    return order.delivery_status === filterStatus;
-  }) || [];
+  const filteredOrders = filterStatus === 'all'
+    ? (data?.orders || [])
+    : filterStatus === 'warehouse_checking'
+      ? (data?.orders.filter((order) => order.delivery_status === 'warehouse_checking' || order.delivery_status === 'warehouse_checked') || [])
+      : (data?.orders.filter((order) => order.delivery_status === filterStatus) || []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -456,15 +453,15 @@ export default function PackageOrdersScreen() {
                 </View>
               )}
 
-              {/* Filter Buttons - 2x2 Grid */}
+              {/* Filter Buttons */}
               <View style={styles.filterGrid}>
                 <View style={styles.filterRow}>
-                  {renderFilterButton('assigned_to_driver', 'Хүлээгдэж', <Circle size={16} color={filterStatus === 'assigned_to_driver' ? '#F59E0B' : '#6B7280'} />)}
-                  {renderFilterButton('warehouse_checked', 'Нярав шалгасан', <ClipboardCheck size={16} color={filterStatus === 'warehouse_checked' ? '#8B5CF6' : '#6B7280'} />)}
+                  {renderFilterButton('all', `Бүгд (${data?.total_count || 0})`, <Package size={16} color={filterStatus === 'all' ? '#2563EB' : '#6B7280'} />)}
+                  {renderFilterButton('assigned_to_driver', `Хүлээгдэж (${data?.status_counts.assigned_to_driver || 0})`, <Circle size={16} color={filterStatus === 'assigned_to_driver' ? '#F59E0B' : '#6B7280'} />)}
                 </View>
                 <View style={styles.filterRow}>
-                  {renderFilterButton('warehouse_checking', 'Нярав шалгаж буй', <Eye size={16} color={filterStatus === 'warehouse_checking' ? '#3B82F6' : '#6B7280'} />)}
-                  {renderFilterButton('driver_checking', 'Түгээгч тулгаж буй', <Eye size={16} color={filterStatus === 'driver_checking' ? '#10B981' : '#6B7280'} />)}
+                  {renderFilterButton('warehouse_checking', `Нярав (${(data?.status_counts.warehouse_checking || 0) + (data?.status_counts.warehouse_checked || 0)})`, <Eye size={16} color={filterStatus === 'warehouse_checking' ? '#3B82F6' : '#6B7280'} />)}
+                  {renderFilterButton('driver_checking', `Түгээгч (${data?.status_counts.driver_checking || 0})`, <Eye size={16} color={filterStatus === 'driver_checking' ? '#10B981' : '#6B7280'} />)}
                 </View>
               </View>
 

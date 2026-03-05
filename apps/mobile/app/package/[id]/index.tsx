@@ -36,9 +36,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import { getPackageOrders, PackageOrdersData, getPackageProducts, PackageProductsSummary, completePackageChecking } from '../../../services/delivery-api';
 
-// Warehouse related statuses - Агуулах хэсэгт харагдах төлөвүүд
-const WAREHOUSE_STATUSES = 'assigned_to_driver,warehouse_checking,warehouse_checked,driver_checking';
-
 export default function PackageCheckingMethodScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { worker } = useAuthStore();
@@ -57,12 +54,10 @@ export default function PackageCheckingMethodScreen() {
         getPackageOrders({
           packageId: parseInt(id),
           workerId: worker?.id,
-          status: WAREHOUSE_STATUSES,
         }),
         getPackageProducts({
           packageId: parseInt(id),
           workerId: worker?.id,
-          status: WAREHOUSE_STATUSES,
         }),
       ]);
       
