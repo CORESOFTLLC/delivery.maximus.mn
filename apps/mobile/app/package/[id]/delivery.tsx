@@ -318,11 +318,18 @@ export default function PackageDeliveryScreen() {
                 <Text style={styles.distanceText}>{order.distance_km.toFixed(1)} км</Text>
               </TouchableOpacity>
             )}
-            {order.customer?.what3words && (
-              <View style={styles.w3wBadge}>
+            {order.customer?.what3words && order.customer.what3words !== 'location_no_check' && (
+              <TouchableOpacity
+                style={styles.w3wBadge}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  Linking.openURL(`https://what3words.com/${order.customer.what3words}`);
+                }}
+                activeOpacity={0.7}
+              >
                 <Grid3X3 size={12} color="#E11D48" />
-                <Text style={styles.w3wText}>{order.customer.what3words}</Text>
-              </View>
+                <Text style={styles.w3wText}>///{order.customer.what3words}</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
