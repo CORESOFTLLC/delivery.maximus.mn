@@ -535,7 +535,8 @@ export default function PartnerDetailScreen() {
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'basic':
+      case 'basic': {
+        const isLoanApproved = partnerDetail.contract?.isLoan === 'true' || partnerDetail.contract?.isLoan === '1';
         return (
           <VStack space="md" className="p-4">
             {/* Company Header Card */}
@@ -868,13 +869,13 @@ export default function PartnerDetailScreen() {
 
                   {/* isLoan - Зээлийн мэдээлэл */}
                   <View style={styles.listItem}>
-                    <View style={[styles.iconBox, { backgroundColor: partnerDetail.contract.isLoan === 'true' || partnerDetail.contract.isLoan === '1' ? '#DCFCE7' : '#F3F4F6' }]}>
-                      <Wallet size={18} color={partnerDetail.contract.isLoan === 'true' || partnerDetail.contract.isLoan === '1' ? '#16A34A' : '#9CA3AF'} />
+                    <View style={[styles.iconBox, { backgroundColor: isLoanApproved ? '#DCFCE7' : '#F3F4F6' }]}>
+                      <Wallet size={18} color={isLoanApproved ? '#16A34A' : '#9CA3AF'} />
                     </View>
                     <VStack className="flex-1 ml-3">
                       <Text size="xs" className="text-typography-500">Зээлийн төлбөр</Text>
-                      <Text size="sm" className={`font-medium ${partnerDetail.contract.isLoan === 'true' || partnerDetail.contract.isLoan === '1' ? 'text-success-600' : 'text-typography-500'}`}>
-                        {partnerDetail.contract.isLoan === 'true' || partnerDetail.contract.isLoan === '1' ? 'Зөвшөөрөгдсөн' : 'Зөвшөөрөгдөөгүй'}
+                      <Text size="sm" className={`font-medium ${isLoanApproved ? 'text-success-600' : 'text-typography-500'}`}>
+                        {isLoanApproved ? 'Зөвшөөрөгдсөн' : 'Зөвшөөрөгдөөгүй'}
                       </Text>
                     </VStack>
                   </View>
@@ -884,6 +885,7 @@ export default function PartnerDetailScreen() {
 
           </VStack>
         );
+      }
 
       case 'products':
         return (
