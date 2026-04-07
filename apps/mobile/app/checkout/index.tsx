@@ -182,7 +182,7 @@ export default function CheckoutScreen() {
 
       // БИЗНЕС ЛОГИК: Харилцагчийн гэрээний үнийн төрөл байвал тэрийг ашиглана,
       // байхгүй бол агуулахын үнийн төрөлийг ашиглана
-      const effectivePriceTypeId = selectedPartner.priceTypeId || selectedWarehouse.priceTypeId || '';
+      const effectivePriceTypeId = selectedPartner?.priceTypeId || selectedWarehouse.priceTypeId || '';
 
       // Build order products for ERP format
       const orderProducts = items.map((item) => ({
@@ -282,7 +282,7 @@ export default function CheckoutScreen() {
 
       // БИЗНЕС ЛОГИК: Харилцагчийн гэрээний үнийн төрөл байвал тэрийг ашиглана,
       // байхгүй бол агуулахын үнийн төрөлийг ашиглана
-      const effectivePriceTypeId = selectedPartner.priceTypeId || selectedWarehouse.priceTypeId || '';
+      const effectivePriceTypeId = selectedPartner?.priceTypeId || selectedWarehouse.priceTypeId || '';
 
       // Build order products for ERP format
       const orderProducts = items.map((item) => ({
