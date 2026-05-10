@@ -141,6 +141,7 @@ interface AuthState {
   // Actions
   login: (employeeCode: string, systemPin: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<{ success: boolean; message?: string }>;
   clearError: () => void;
   getToken: () => string | null;
 }
@@ -266,7 +267,6 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         const token = get().token;
         
-        // Try to invalidate token on server
         if (token) {
           try {
             await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -290,6 +290,48 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           error: null,
         });
+      },
+
+      deleteAccount: async () => {
+        const { token } = get();
+        if (!token) {
+          return { success: false, message: 'Нэвтрээгүй байна' };
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/auth/delete-account`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ confirm: true }),
+          });
+
+          const result = await response.json().catch(() => ({}));
+
+          if (response.ok && result.success) {
+            set({
+              worker: null,
+              token: null,
+              erpRoutes: null,
+              employeeDetail: null,
+              deliveryInfo: null,
+              isAuthenticated: false,
+              error: null,
+            });
+            return { success: true, message: result.message };
+          }
+
+          return {
+            success: false,
+            message: result.message || 'Бүртгэл устгахад алдаа гарлаа',
+          };
+        } catch (err) {
+          console.error('Delete account error:', err);
+          return { success: false, message: 'Сүлжээний алдаа гарлаа' };
+        }
       },
 
       clearError: () => {

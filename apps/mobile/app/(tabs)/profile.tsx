@@ -21,6 +21,7 @@ import {
   Image,
   TouchableOpacity,
   Linking,
+  Alert,
 } from 'react-native';
 // @ts-ignore
 import { router } from 'expo-router';
@@ -46,16 +47,20 @@ import {
   Heart,
   Circle,
   Truck,
+  LogOut,
+  ShieldOff,
+  Trash2,
 } from 'lucide-react-native';
 import { useAuthStore } from '../../stores/delivery-auth-store';
 import { getWorkerProfile, WorkerProfile, CoworkerInfo } from '../../services/delivery-api';
 
 export default function ProfileScreen() {
-  const { worker, employeeDetail } = useAuthStore();
+  const { worker, employeeDetail, logout, deleteAccount } = useAuthStore();
   const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -83,6 +88,54 @@ export default function ProfileScreen() {
     setRefreshing(true);
     fetchData();
   }, [fetchData]);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Системээс гарах',
+      'Та системээс гарахдаа итгэлтэй байна уу?',
+      [
+        { text: 'Болих', style: 'cancel' },
+        {
+          text: 'Гарах',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Бүртгэл устгах',
+      'Таны бүртгэл болон холбогдох бүх мэдээлэл устгагдана. Энэ үйлдлийг буцаах боломжгүй. Үргэлжлүүлэхдээ итгэлтэй байна уу?',
+      [
+        { text: 'Болих', style: 'cancel' },
+        {
+          text: 'Устгах',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            const result = await deleteAccount();
+            setDeletingAccount(false);
+
+            if (result.success) {
+              Alert.alert(
+                'Амжилттай',
+                result.message || 'Таны бүртгэл устгагдлаа.',
+                [{ text: 'OK', onPress: () => router.replace('/login') }]
+              );
+              return;
+            }
+
+            Alert.alert('Алдаа', result.message || 'Бүртгэл устгахад алдаа гарлаа.');
+          },
+        },
+      ]
+    );
+  };
 
   // Get initials from name
   const userInitials = useMemo(() => {
@@ -373,6 +426,48 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
+
+      {/* ====== ACCOUNT MANAGEMENT ====== */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Бүртгэлийн удирдлага</Text>
+
+        {/* Logout */}
+        <TouchableOpacity style={styles.logoutRow} onPress={handleLogout} activeOpacity={0.8}>
+          <View style={styles.accountActionIcon}>
+            <LogOut size={18} color="#2563EB" />
+          </View>
+          <Text style={styles.logoutRowText}>Системээс гарах</Text>
+        </TouchableOpacity>
+
+        {/* Delete account */}
+        <View style={styles.dangerCard}>
+          <View style={styles.dangerHeaderRow}>
+            <View style={styles.dangerIconWrap}>
+              <ShieldOff size={18} color="#DC2626" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dangerTitle}>Бүртгэл устгах</Text>
+              <Text style={styles.dangerDescription}>
+                Таны бүртгэл болон холбогдох бүх мэдээлэл бүрмөсөн устгагдана.
+                Энэ үйлдлийг буцаах боломжгүй.
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.deleteAccountButton, deletingAccount && { opacity: 0.7 }]}
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+            activeOpacity={0.8}
+          >
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color="#DC2626" />
+            ) : (
+              <Trash2 size={16} color="#DC2626" />
+            )}
+            <Text style={styles.deleteAccountText}>Бүртгэл устгах</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -830,6 +925,86 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Bold',
     color: '#111827',
     marginTop: 2,
+  },
+
+  // Account Management
+  logoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  accountActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  logoutRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'GIP-SemiBold',
+    color: '#2563EB',
+  },
+  dangerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    gap: 12,
+  },
+  dangerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  dangerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerTitle: {
+    fontSize: 14,
+    fontFamily: 'GIP-Bold',
+    color: '#111827',
+  },
+  dangerDescription: {
+    fontSize: 12,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  deleteAccountButton: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontFamily: 'GIP-Bold',
+    color: '#DC2626',
   },
 
   // Emergency

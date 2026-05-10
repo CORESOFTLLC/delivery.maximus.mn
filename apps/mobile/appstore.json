@@ -1,0 +1,209 @@
+Store-д бичих тайлбар, зөвлөмж
+
+================================================================================
+APP STORE CONNECT — "App Review Information" хэсэг (Notes for Reviewer)
+================================================================================
+
+LOCATION USAGE EXPLANATION:
+
+Maximus Delivery is a last-mile delivery management app used by delivery drivers
+to receive, track, and complete delivery orders from warehouse to customer.
+
+SPECIFIC LOCATION FEATURES:
+
+1. MANDATORY STARTUP LOCATION CHECK
+   - When: App launches
+   - What: GPS location is requested before the app loads
+   - Why: The entire app depends on location for route optimization and distance
+           calculations — without it, drivers cannot sort or navigate deliveries
+
+2. ROUTE OPTIMIZATION
+   - When: Driver taps "Маршрут оновчлох" (Optimize Route) on a delivery package
+   - What: Current GPS coordinates sent to server to sort orders by nearest distance
+   - Why: Minimizes total travel distance, improving delivery efficiency
+
+3. DELIVERY ORDER DISTANCE DISPLAY
+   - When: Package delivery screen loads
+   - What: Distance (in km) to each customer address calculated from current position
+   - Why: Driver can prioritize nearest deliveries first
+
+4. DELIVERY CONFIRMATION GPS STAMP
+   - When: Driver marks order as "Хүргэгдсэн" (Delivered)
+   - What: GPS coordinates captured and submitted with delivery confirmation
+   - Why: Provides verifiable proof that the driver was at the correct location
+
+5. PARTNER / ROUTE SCREENS
+   - When: Partners "All" and "Route" tabs load
+   - What: Current location used to calculate proximity to partner locations
+   - Why: Helps drivers navigate to the correct partner pickup points
+
+CAMERA USAGE EXPLANATION:
+
+1. DELIVERY PROOF PHOTO
+   - When: Driver confirms delivery completion (order detail screen)
+   - What: Camera launched to capture a photo as delivery proof
+   - Why: Photo is submitted to the server as evidence of successful delivery
+   - Access: Only when driver explicitly taps the camera button
+
+CRITICAL PRIVACY NOTES:
+- NO BACKGROUND LOCATION TRACKING
+- Location is accessed ONLY when user actively uses delivery features
+- We use "When In Use" permission only (not "Always")
+- Location data is submitted to company server for delivery verification only
+- Camera is accessed ONLY when driver intentionally taps the photo button
+- Photos are uploaded as delivery proof and NOT stored locally
+
+DEMO ACCOUNT FOR TESTING:
+[Provide test credentials if available]
+
+================================================================================
+APP STORE CONNECT — "App Privacy" (Data Types)
+================================================================================
+
+Data Type: Precise Location
+- Used for: App Functionality
+- Linked to User: Yes (for delivery confirmation records)
+- Tracking: No
+- Purpose: Route optimization, distance display, and GPS-stamped delivery proof
+
+Data Type: Photos (Camera)
+- Used for: App Functionality
+- Linked to User: Yes (delivery proof photos tied to order records)
+- Tracking: No
+- Purpose: Capturing delivery proof photos when completing delivery orders
+
+================================================================================
+NSLocationWhenInUseUsageDescription (Info.plist)
+================================================================================
+
+Maximus Delivery requires your location to optimize delivery routes and verify
+order completion. Your GPS position is used to sort delivery addresses by
+nearest distance, and is recorded when you confirm a delivery as proof that
+you were at the correct location. Location is ONLY accessed while the app is
+in use and is NEVER tracked in the background.
+
+================================================================================
+NSCameraUsageDescription (Info.plist)
+================================================================================
+
+Maximus Delivery uses your camera to capture delivery proof photos. When you
+complete a delivery, you can take a photo as evidence of successful handoff.
+The photo is uploaded to the delivery record and is NOT stored on your device.
+
+================================================================================
+GOOGLE PLAY CONSOLE — "Data Safety" хэсэг
+================================================================================
+
+Асуулт                                    | Хариулт
+------------------------------------------|------------------------------------------
+Does your app collect location data?      | Yes
+Is this data collected, shared, or both?  | Collected (shared биш)
+Is this data processed ephemerally?       | No (серверт хадгалдаг)
+Is this data required?                    | Yes
+Is this data used for advertising?        | No
+Purpose                                   | App functionality — Delivery route optimization and GPS-stamped delivery confirmation
+
+Does your app collect photos/videos?      | Yes
+Is this data collected, shared, or both?  | Collected (shared биш)
+Is this data processed ephemerally?       | No (серверт хадгалдаг)
+Is this data required?                    | No (optional proof photo)
+Is this data used for advertising?        | No
+Purpose                                   | App functionality — Delivery proof photo upon order completion
+
+================================================================================
+APP DESCRIPTION (хоёр store-д)
+================================================================================
+
+--- Товч тайлбар (Short description - 80 characters max) ---
+
+Жолоочийн хүргэлтийн маршрут, захиалга, баталгаа удирдах түгээлтийн апп
+
+--- Дэлгэрэнгүй тайлбар (Full description) ---
+
+MAXIMUS Delivery нь сүүлийн миль түгээлтийн жолоочдод зориулсан мобайл
+удирдлагын систем юм.
+
+Үндсэн боломжууд:
+• Маршрут оновчлол — GPS байршилд суурилсан ойр захиалгаас эрэмбэлэх
+• Захиалга удирдал — Ачигдсан, хүргэж буй, хүргэгдсэн, амжилтгүй статус
+• Хүргэлтийн баталгаа — Зураг болон GPS тэмдэглэлтэй хүргэлт баталгаажуулалт
+• Агуулахын тулгалт — Падаан болон барааны тулгалт бүртгэл
+• Өдрийн тайлан — Нийт хүргэсэн, амжилтгүй, буцаасан тоо
+
+📍 БАЙРШЛЫН МЭДЭЭЛЛИЙН ТУХАЙ:
+Энэ апп нь хүргэлтийн маршрутыг оновчлох болон захиалга баталгаажуулахад
+GPS байршил ашигладаг. Байршлыг ЗӨВХӨН апп ашиглаж байх үед л авдаг бөгөөд
+цаана нь хэзээ ч байршил хянахгүй. Таны байршил нь хамгийн ойр захиалгыг
+тодорхойлоход болон хүргэлтийн баталгааны бүртгэлд хадгалагдана.
+
+📷 КАМЕРЫН МЭДЭЭЛЛИЙН ТУХАЙ:
+Камерыг ЗӨВХӨН та "Зураг авах" товч дарах үед л ашиглана. Авсан зураг нь
+хүргэлтийн баталгаа болгон серверт илгээгдэх бөгөөд төхөөрөмжид хадгалагдахгүй.
+
+================================================================================
+APPLE REVIEW REJECTION-Д ХАРИУЛАХ ЗАГВАР
+================================================================================
+
+Guideline 5.1.1 - Data Collection and Storage буюу 5.1.2 - Data Use and Sharing:
+
+Hi,
+
+Thank you for your feedback. We use location data solely for delivery route
+optimization and GPS-verified delivery confirmation, which is the core
+functionality of our last-mile delivery management app.
+
+Here's how we use location:
+
+1. ROUTE OPTIMIZATION: When delivery drivers receive a batch of orders, we use
+   their current GPS location to sort delivery addresses from nearest to farthest.
+   Without this, drivers cannot efficiently navigate their deliveries.
+
+2. DELIVERY GPS STAMP: When a driver marks an order as delivered, we record
+   their GPS coordinates as verifiable proof that they were at the correct
+   customer location. This protects both drivers and the company from disputes.
+
+3. DISTANCE DISPLAY: We show drivers the distance (km) to each customer address
+   so they can prioritize their route effectively.
+
+Here's how we use the camera:
+
+4. DELIVERY PROOF PHOTO: Drivers can optionally take a photo when completing a
+   delivery as additional proof of successful handoff. This is accessed only when
+   the driver explicitly taps the camera button.
+
+IMPORTANT:
+- We do NOT use background location tracking
+- We use "When In Use" permission ONLY
+- Location is accessed ONLY when the driver is actively using delivery features
+- Camera is accessed ONLY when driver intentionally taps the photo button
+- This is an enterprise delivery management app where location and photo proof
+  are standard industry practices for last-mile delivery verification
+
+Please let us know if you need any additional information or a demo video
+showing these features.
+
+Best regards,
+Maximus Delivery Team
+
+================================================================================
+ЧУХАЛ ЗӨВЛӨМЖ
+================================================================================
+
+✅ ХИЙХ ЗҮЙЛС:
+1. NSLocationWhenInUseUsageDescription нэмэх — app.json infoPlist хэсэгт
+2. NSCameraUsageDescription нэмэх — app.json infoPlist хэсэгт
+3. expo-location plugin нэмэх — зөвхөн locationWhenInUsePermission
+4. expo-image-picker plugin нэмэх — photosPermission болон cameraPermission
+
+⚠️ REVIEW-ЭЭС ӨМНӨ ШАЛГАХ:
+- Privacy Policy URL оруулсан эсэх
+- Demo account байгаа эсэх
+- App эхлэхэд location permission dialog харагдаж байгаа эсэх
+- Screenshot дээр маршрут болон хүргэлтийн feature харагдаж байгаа эсэх
+- Camera permission dialog хүргэлт баталгаажуулах дэлгэцэд харагдаж байгаа эсэх
+
+🎥 DEMO VIDEO ОРУУЛАХ (Заавал биш, гэхдээ тустай):
+- Апп нэвтрэхэд location permission dialog харагдах
+- Маршрут оновчлох товч дарахад ойр захиалга дараалах
+- Захиалга хүргэсэн гэж тэмдэглэх үед GPS тэмдэглэгдэх
+- Камер нэвтрэх товч дарахад camera permission dialog харагдах

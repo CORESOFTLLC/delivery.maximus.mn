@@ -6,9 +6,11 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
+
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 85 : 65;
 // @ts-ignore - expo-router exports router in v6
 import { router } from 'expo-router';
 import { 
@@ -163,51 +165,64 @@ export default function DeliveryScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#e17100" />
-        <Text style={styles.loadingText}>Уншиж байна...</Text>
+      <View style={styles.container}>
+        <View style={styles.summaryBar}>
+          {[1, 2, 3, 4].map((i) => (
+            <View key={i} style={styles.summaryItem}>
+              <View style={styles.skeletonCircle} />
+              <View style={[styles.skeletonLine, { width: 28, marginTop: 6 }]} />
+              <View style={[styles.skeletonLine, { width: 40, marginTop: 4 }]} />
+            </View>
+          ))}
+        </View>
+        <View style={{ padding: 16, gap: 12 }}>
+          {[1, 2, 3].map((i) => (
+            <View key={i} style={[styles.packageCard, { height: 100 }]}>
+              <View style={[styles.skeletonLine, { width: '50%', height: 14 }]} />
+              <View style={[styles.skeletonLine, { width: '30%', height: 10, marginTop: 8 }]} />
+              <View style={[styles.skeletonLine, { width: '100%', height: 6, marginTop: 12, borderRadius: 3 }]} />
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerIconRow}>
-          <Truck size={24} color="#e17100" />
-          <Text style={styles.headerTitle}>Түгээлт</Text>
-        </View>
-        <Text style={styles.headerSubtitle}>
-          {packages.length > 0 
-            ? `${packages.length} багц хүргэлтэд бэлэн`
-            : 'Хүргэлтэд бэлэн багц алга'
-          }
-        </Text>
-      </View>
-
+      {/* Summary bar — warehouse загвараар */}
       {stats && (
-        <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, { backgroundColor: '#DBEAFE' }]}>
-              <Package size={20} color="#2563EB" />
-              <Text style={[styles.statValue, { color: '#2563EB' }]}>{stats.total_orders}</Text>
-              <Text style={styles.statLabel}>Нийт</Text>
+        <View style={styles.summaryBar}>
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#DBEAFE' }]}>
+              <Package size={16} color="#2563EB" />
             </View>
-            <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
-              <CheckCircle2 size={20} color="#e17100" />
-              <Text style={[styles.statValue, { color: '#e17100' }]}>{stats.delivered}</Text>
-              <Text style={styles.statLabel}>Хүргэсэн</Text>
+            <Text style={styles.summaryValue}>{stats.total_orders}</Text>
+            <Text style={styles.summaryLabel}>Нийт</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#D1FAE5' }]}>
+              <CheckCircle2 size={16} color="#059669" />
             </View>
-            <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
-              <Clock size={20} color="#D97706" />
-              <Text style={[styles.statValue, { color: '#D97706' }]}>{stats.pending + stats.in_progress}</Text>
-              <Text style={styles.statLabel}>Үлдсэн</Text>
+            <Text style={[styles.summaryValue, { color: '#059669' }]}>{stats.delivered}</Text>
+            <Text style={styles.summaryLabel}>Хүргэсэн</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Clock size={16} color="#D97706" />
             </View>
-            <View style={[styles.statCard, { backgroundColor: '#FEE2E2' }]}>
-              <XCircle size={20} color="#DC2626" />
-              <Text style={[styles.statValue, { color: '#DC2626' }]}>{stats.failed}</Text>
-              <Text style={styles.statLabel}>Амжилтгүй</Text>
+            <Text style={[styles.summaryValue, { color: '#B45309' }]}>{stats.pending + stats.in_progress}</Text>
+            <Text style={styles.summaryLabel}>Үлдсэн</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#FEE2E2' }]}>
+              <XCircle size={16} color="#DC2626" />
             </View>
+            <Text style={[styles.summaryValue, { color: '#DC2626' }]}>{stats.failed}</Text>
+            <Text style={styles.summaryLabel}>Амжилтгүй</Text>
           </View>
         </View>
       )}
@@ -216,19 +231,35 @@ export default function DeliveryScreen() {
         data={packages}
         renderItem={renderPackageItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          packages.length === 0 && { flex: 1 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#e17100']}
+            tintColor="#2563EB"
+            colors={['#2563EB']}
           />
         }
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <CheckCircle2 size={64} color="#f59e0b" />
-            <Text style={styles.emptyText}>Хүргэлтийн багц алга</Text>
-            <Text style={styles.emptySubtext}>Агуулах хэсэгт тулгалт хийнэ үү</Text>
+            <View style={styles.emptyIconWrap}>
+              <CheckCircle2 size={40} color="#059669" />
+            </View>
+            <Text style={styles.emptyTitle}>Хүргэлтийн багц алга</Text>
+            <Text style={styles.emptySubtitle}>
+              Агуулах хэсэгт тулгалт хийснийх дараа{'\n'}хүргэлтийн багц энд харагдана.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              activeOpacity={0.7}
+              onPress={() => router.push('/(tabs)/warehouse' as any)}
+            >
+              <Text style={styles.emptyButtonText}>Агуулах руу шилжих</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -241,73 +272,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
-  loadingContainer: {
+
+  /* ── Summary bar (warehouse-тай ижил загвар) ── */
+  summaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  summaryItem: {
     flex: 1,
+    alignItems: 'center',
+  },
+  summaryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    marginBottom: 4,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontFamily: 'GIP-Medium',
-    color: '#6B7280',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  headerIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerTitle: {
-    fontSize: 22,
+  summaryValue: {
+    fontSize: 18,
     fontFamily: 'GIP-Bold',
-    color: '#111827',
+    color: '#1F2937',
   },
-  headerSubtitle: {
-    fontSize: 14,
+  summaryLabel: {
+    fontSize: 11,
     fontFamily: 'GIP-Regular',
     color: '#6B7280',
-    marginTop: 4,
-    marginLeft: 34,
+    marginTop: 1,
   },
-  statsContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  summaryDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#E5E7EB',
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-  },
-  statValue: {
-    fontSize: 20,
-    fontFamily: 'GIP-Bold',
-    marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'GIP-Regular',
-    color: '#6B7280',
-    marginTop: 2,
-  },
+
   listContent: {
     padding: 16,
+    paddingBottom: TAB_BAR_HEIGHT + 16,
   },
   packageCard: {
     flexDirection: 'row',
@@ -385,31 +392,71 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#e17100',
+    backgroundColor: '#10B981',
     borderRadius: 3,
   },
   progressText: {
     fontSize: 12,
     fontFamily: 'GIP-SemiBold',
-    color: '#e17100',
+    color: '#6B7280',
     minWidth: 36,
   },
+
+  /* ── Empty state (warehouse-тай ижил загвар) ── */
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingHorizontal: 32,
   },
-  emptyText: {
-    fontSize: 16,
-    fontFamily: 'GIP-SemiBold',
-    color: '#6B7280',
-    marginTop: 16,
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
-  emptySubtext: {
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: 'GIP-Bold',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
     fontSize: 14,
     fontFamily: 'GIP-Regular',
-    color: '#9CA3AF',
-    marginTop: 4,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
+  emptyButton: {
+    marginTop: 24,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  emptyButtonText: {
+    fontSize: 14,
+    fontFamily: 'GIP-SemiBold',
+    color: '#FFFFFF',
+  },
+
+  /* ── Skeleton ── */
+  skeletonCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E5E7EB',
+  },
+
 });
+

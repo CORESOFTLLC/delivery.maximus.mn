@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Image, Platform, Text as RNText, ScrollView, Alert } from 'react-native';
-import { Warehouse, Truck, Menu, X, User, Settings, LogOut, ChevronRight, MapPin, BarChart3, Home } from 'lucide-react-native';
+import { Warehouse, Truck, Menu, X, User, LogOut, ChevronRight, BarChart3, Home } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { version as appVersion } from '../../package.json';
 import { useAuthStore } from '../../stores/delivery-auth-store';
@@ -27,8 +27,6 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
   const menuItems = [
     { icon: User, label: 'Профайл', route: '/profile', color: '#2563EB' },
-    { icon: MapPin, label: 'Байршил', route: '/location', color: '#e17100' },
-    { icon: Settings, label: 'Тохиргоо', route: '/settings', color: '#6B7280' },
   ];
 
   const handleMenuPress = (route: string) => {

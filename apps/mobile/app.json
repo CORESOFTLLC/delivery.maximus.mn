@@ -18,6 +18,8 @@
       "bundleIdentifier": "com.maximus.delivery",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Maximus Delivery requires your location to optimize delivery routes and verify order completion. Your GPS position is used to sort delivery addresses by nearest distance, and is recorded when you confirm a delivery as proof that you were at the correct location. Location is ONLY accessed while the app is in use and is NEVER tracked in the background.",
+        "NSCameraUsageDescription": "Maximus Delivery uses your camera to capture delivery proof photos. When you complete a delivery, you can take a photo as evidence of successful handoff. The photo is uploaded to the delivery record and is NOT stored on your device.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSExceptionDomains": {
@@ -44,7 +46,20 @@
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Maximus Delivery requires your location to optimize delivery routes and verify order completion. Your GPS position is used to sort delivery addresses by nearest distance, and is recorded when you confirm a delivery as proof that you were at the correct location. Location is ONLY accessed while the app is in use and is NEVER tracked in the background."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Maximus Delivery accesses your photo library only when you choose to attach an existing photo as delivery proof.",
+          "cameraPermission": "Maximus Delivery uses your camera to capture delivery proof photos. When you complete a delivery, you can take a photo as evidence of successful handoff. The photo is uploaded to the delivery record and is NOT stored on your device."
+        }
+      ]
     ],
     "extra": {
       "router": {},

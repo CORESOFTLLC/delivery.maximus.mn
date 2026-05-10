@@ -9,6 +9,7 @@ import {
   StyleSheet, 
   Alert,
   Switch,
+  Linking,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -320,8 +321,16 @@ export default function LoginScreen() {
                 )}
               </Button>
 
+              {/* Register link */}
+              <View style={styles.registerRow}>
+                <Text size="sm" style={styles.registerRowText}>Бүртгэлгүй юу?</Text>
+                <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
+                  <Text size="sm" style={styles.registerLink}>Бүртгүүлэх</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Footer */}
-              <VStack space="xs" className="mt-8 items-center">
+              <VStack space="xs" className="mt-4 items-center">
                 <TouchableOpacity 
                   onPress={async () => {
                     await Clipboard.setStringAsync(deviceId);
@@ -340,6 +349,16 @@ export default function LoginScreen() {
                 <Text size="xs" className="text-typography-400">
                   Delivery Maximus v1.0.0
                 </Text>
+                {/* Privacy Policy & Terms */}
+                <HStack space="xs" className="items-center mt-2">
+                  <TouchableOpacity onPress={() => Linking.openURL('https://www.privacypolicies.com/live/795d7442-23c2-4262-889a-13de9168ac09')} activeOpacity={0.7}>
+                    <Text size="xs" style={styles.policyLink}>Нууцлалын бодлого</Text>
+                  </TouchableOpacity>
+                  <Text size="xs" className="text-typography-400">·</Text>
+                  <TouchableOpacity onPress={() => Linking.openURL('https://www.privacypolicies.com/live/70312442-12a4-4cdf-af1f-a8753c879d79')} activeOpacity={0.7}>
+                    <Text size="xs" style={styles.policyLink}>Үйлчилгээний нөхцөл</Text>
+                  </TouchableOpacity>
+                </HStack>
                 <Text size="sm" className="text-typography-400 mt-2">
                   © 2026 MAXIMUS DISTRIBUTION LLC
                 </Text>
@@ -401,5 +420,27 @@ const styles = StyleSheet.create({
   pinInputError: {
     borderColor: '#DC2626',
     backgroundColor: '#FEF2F2',
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  registerRowText: {
+    fontSize: 14,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
+  },
+  registerLink: {
+    fontSize: 14,
+    fontFamily: 'GIP-SemiBold',
+    color: '#0051FE',
+  },
+  policyLink: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#0051FE',
   },
 });

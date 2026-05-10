@@ -23,7 +23,6 @@ import {
   Platform,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Package,
   CheckCircle2,
@@ -33,7 +32,6 @@ import {
   CreditCard,
   Clock,
   TrendingUp,
-  BarChart3,
   Wallet,
   Calendar,
   RotateCcw,
@@ -142,12 +140,19 @@ export default function ReportScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.container}>
+        <View style={styles.filterContainer}>
+          {DATE_FILTERS.map((f) => (
+            <View key={f.key} style={[styles.filterTab, { backgroundColor: '#F3F4F6' }]}>
+              <View style={[styles.skeletonLine, { width: '70%', height: 10 }]} />
+            </View>
+          ))}
+        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>Тайлан ачааллаж байна...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -158,46 +163,46 @@ export default function ReportScreen() {
   const hasReturns = (report?.returns?.total_return_orders ?? 0) > 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <View style={styles.container}>
+      {/* Date Filter Tabs — дээд талд sticky */}
+      <View style={styles.filterBar}>
+        {DATE_FILTERS.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            style={[
+              styles.filterTab,
+              (dateFilter === f.key || (f.key === 'custom' && dateFilter === 'custom')) &&
+                styles.filterTabActive,
+            ]}
+            onPress={() => handleFilterChange(f.key)}
+          >
+            {f.key === 'custom' && <Calendar size={14} color={dateFilter === 'custom' ? '#FFF' : '#6B7280'} />}
+            <Text
+              style={[
+                styles.filterTabText,
+                (dateFilter === f.key || (f.key === 'custom' && dateFilter === 'custom')) &&
+                  styles.filterTabTextActive,
+              ]}
+            >
+              {f.key === 'custom' && customDate ? customDate : f.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#2563EB"
+            colors={['#2563EB']}
+          />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <BarChart3 size={28} color="#2563EB" />
-          <Text style={styles.headerTitle}>Хүргэлтийн тайлан</Text>
-          <Text style={styles.headerDate}>{getFilterLabel()}</Text>
-        </View>
-
-        {/* Date Filter Tabs */}
-        <View style={styles.filterContainer}>
-          {DATE_FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[
-                styles.filterTab,
-                (dateFilter === f.key || (f.key === 'custom' && dateFilter === 'custom')) &&
-                  styles.filterTabActive,
-              ]}
-              onPress={() => handleFilterChange(f.key)}
-            >
-              {f.key === 'custom' && <Calendar size={14} color={dateFilter === 'custom' ? '#FFF' : '#6B7280'} />}
-              <Text
-                style={[
-                  styles.filterTabText,
-                  (dateFilter === f.key || (f.key === 'custom' && dateFilter === 'custom')) &&
-                    styles.filterTabTextActive,
-                ]}
-              >
-                {f.key === 'custom' && customDate ? customDate : f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
 
         {/* Delivery Stats */}
         <View style={styles.section}>
@@ -562,6 +567,7 @@ export default function ReportScreen() {
       </ScrollView>
 
       {/* Date Picker Modal */}
+
       <Modal visible={showDatePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -605,7 +611,7 @@ export default function ReportScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -658,25 +664,16 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
 
-  /* Header */
-  header: {
-    alignItems: 'center',
-    marginBottom: 16,
+  /* ── Filter bar — дээд талд sticky (warehouse summaryBar-тай ижил байрлал) ── */
+  filterBar: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  headerTitle: {
-    fontSize: 22,
-    fontFamily: 'GIP-Bold',
-    color: '#1F2937',
-    marginTop: 8,
-  },
-  headerDate: {
-    fontSize: 14,
-    fontFamily: 'GIP-Regular',
-    color: '#6B7280',
-    marginTop: 4,
-  },
-
-  /* Filter tabs */
   filterContainer: {
     flexDirection: 'row',
     gap: 8,
@@ -690,7 +687,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -705,6 +702,13 @@ const styles = StyleSheet.create({
   },
   filterTabTextActive: {
     color: '#FFFFFF',
+  },
+
+  /* ── Skeleton ── */
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E5E7EB',
   },
 
   /* Section */
