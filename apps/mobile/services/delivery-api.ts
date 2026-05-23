@@ -1314,6 +1314,9 @@ export interface BatchProduct {
   seri_days: number;
   warehouse_checked: boolean;
   image_url: string | null;
+  bridge_name: string | null;
+  barcode: string | null;
+  product_code: string | null;
 }
 
 export interface BatchEmployee {

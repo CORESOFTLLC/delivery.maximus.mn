@@ -520,13 +520,16 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
             {product.name}
           </Text>
           <View style={styles.productMeta}>
-            {product.series_name ? (
-              <Text style={styles.productSeries} numberOfLines={1}>
-                {product.series_name}
-                {product.series_expiry_date
-                  ? ` · ${product.series_expiry_date.slice(0, 10)}`
-                  : ''}
+            {product.bridge_name ? (
+              <Text style={styles.productBridgeName} numberOfLines={1}>{product.bridge_name}</Text>
+            ) : null}
+            {(product.barcode || product.product_code) ? (
+              <Text style={styles.productCodes} numberOfLines={1}>
+                {[product.barcode, product.product_code].filter(Boolean).join(' · ')}
               </Text>
+            ) : null}
+            {product.series_name ? (
+              <Text style={styles.productSeries} numberOfLines={1}>{product.series_name}</Text>
             ) : product.seri_days > 0 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                 <AlertCircle size={11} color="#D97706" />
@@ -1030,6 +1033,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'GIP-Regular',
     color: '#6B7280',
+  },
+  productBridgeName: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+  },
+  productCodes: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
   },
   productSeriesWarn: {
     fontSize: 11,
