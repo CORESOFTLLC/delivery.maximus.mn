@@ -925,15 +925,16 @@ function ProductRow({
           ) : null}
 
           {/* Series */}
-          {product.series_expiry_date ? (
+          {(product.series_name || product.series_expiry_date) ? (
             <View style={styles.productSeriesChip}>
               <Text style={styles.productSeriesChipText}>
-                {product.series_name ?? ''} · {product.series_expiry_date.slice(0, 10)}
+                {product.series_name
+                  ? product.series_name
+                  : (() => {
+                      const d = product.series_expiry_date!;
+                      return 'Хүртэл ' + d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(2, 4);
+                    })()}
               </Text>
-            </View>
-          ) : product.series_name ? (
-            <View style={styles.productSeriesChip}>
-              <Text style={styles.productSeriesChipText}>{product.series_name}</Text>
             </View>
           ) : product.seri_days > 0 ? (
             <View style={styles.productSeriesWarnChip}>
