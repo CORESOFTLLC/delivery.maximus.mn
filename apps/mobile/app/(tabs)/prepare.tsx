@@ -529,7 +529,9 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
               </Text>
             ) : null}
             {product.series_name ? (
-              <Text style={styles.productSeries} numberOfLines={1}>{product.series_name}</Text>
+              <Text style={styles.productSeries} numberOfLines={1}>
+                {product.series_name}{product.series_expiry_date ? ` · ${product.series_expiry_date.slice(0, 10)}` : ''}
+              </Text>
             ) : product.seri_days > 0 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                 <AlertCircle size={11} color="#D97706" />
