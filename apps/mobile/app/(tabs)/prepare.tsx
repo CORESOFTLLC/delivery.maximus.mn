@@ -34,6 +34,7 @@ import {
   RefreshCw,
   User,
   Shield,
+  DoorOpen,
 } from 'lucide-react-native';
 import {
   getWarehouseBatches,
@@ -334,7 +335,10 @@ function BatchDetailView({
           <Text style={styles.detailBatchCode}>{detail.batch_code}</Text>
           <StatusBadge status={detail.status} label={detail.status_label} color={detail.status_color} />
         </View>
-        <Text style={styles.detailGate}>🚪 {detail.gate_name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <DoorOpen size={14} color="#6B7280" />
+          <Text style={styles.detailGate}>{detail.gate_name}</Text>
+        </View>
       </View>
 
       {/* Info Cards */}
@@ -487,11 +491,30 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
       ? 'Бэлдэж байна'
       : 'Хүлээгдэж байна';
 
+  const initials = product.name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0] ?? '')
+    .join('')
+    .toUpperCase();
+
   return (
     <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
-      {/* Left: status dot + name */}
+      {/* Left: image + name */}
       <View style={styles.productLeft}>
-        <PrepStatusDot status={product.prep_status} />
+        <View style={[styles.productImageWrap, { borderColor: prepColor }]}>
+          {product.image_url ? (
+            <Image
+              source={{ uri: product.image_url }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.productImagePlaceholder, { backgroundColor: prepColor + '22' }]}>
+              <Text style={[styles.productImageInitials, { color: prepColor }]}>{initials}</Text>
+            </View>
+          )}
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.productName} numberOfLines={2}>
             {product.name}
@@ -499,13 +522,16 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
           <View style={styles.productMeta}>
             {product.series_name ? (
               <Text style={styles.productSeries} numberOfLines={1}>
-                📦 {product.series_name}
+                {product.series_name}
                 {product.series_expiry_date
                   ? ` · ${product.series_expiry_date.slice(0, 10)}`
                   : ''}
               </Text>
             ) : product.seri_days > 0 ? (
-              <Text style={styles.productSeriesWarn}>⚠ Сери оноогдоогүй ({product.seri_days}хн)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <AlertCircle size={11} color="#D97706" />
+                <Text style={styles.productSeriesWarn}>Сери оноогдоогүй ({product.seri_days}хн)</Text>
+              </View>
             ) : null}
             <Text style={[styles.productPrepStatus, { color: prepColor }]}>{prepLabel}</Text>
           </View>
@@ -966,6 +992,28 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginTop: 4,
+  },
+  productImageWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 2,
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productImageInitials: {
+    fontSize: 14,
+    fontFamily: 'GIP-Bold',
   },
   productName: {
     fontSize: 13,

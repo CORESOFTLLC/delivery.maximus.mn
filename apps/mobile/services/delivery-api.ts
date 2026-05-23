@@ -1313,6 +1313,7 @@ export interface BatchProduct {
   prep_status: 'new' | 'preparing' | 'prepared';
   seri_days: number;
   warehouse_checked: boolean;
+  image_url: string | null;
 }
 
 export interface BatchEmployee {
