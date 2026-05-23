@@ -417,9 +417,31 @@ function BatchDetailView({
       {/* Products List */}
       <Text style={styles.sectionTitle}>Бараануудын жагсаалт ({detail.products.length})</Text>
 
-      {detail.products.map((product, idx) => (
-        <ProductRow key={product.product_uuid} product={product} index={idx} />
-      ))}
+      {(() => {
+        // Group by brand, sort groups and products alphabetically
+        const grouped = new Map<string, typeof detail.products>();
+        const sorted = [...detail.products].sort((a, b) =>
+          (a.name ?? '').localeCompare(b.name ?? '', 'mn')
+        );
+        for (const p of sorted) {
+          const brand = p.bridge_name ?? '—';
+          if (!grouped.has(brand)) grouped.set(brand, []);
+          grouped.get(brand)!.push(p);
+        }
+        const brandsSorted = [...grouped.keys()].sort((a, b) => a.localeCompare(b, 'mn'));
+        let globalIdx = 0;
+        return brandsSorted.map((brand) => (
+          <View key={brand}>
+            <View style={styles.brandHeader}>
+              <Text style={styles.brandHeaderText}>{brand}</Text>
+              <Text style={styles.brandHeaderCount}>{grouped.get(brand)!.length} нэр</Text>
+            </View>
+            {grouped.get(brand)!.map((product) => (
+              <ProductRow key={product.product_uuid} product={product} index={globalIdx++} />
+            ))}
+          </View>
+        ));
+      })()}
     </ScrollView>
   );
 }
@@ -975,6 +997,27 @@ const styles = StyleSheet.create({
     color: '#374151',
     paddingHorizontal: 16,
     marginBottom: 8,
+  },
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  brandHeaderText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
+    flex: 1,
+  },
+  brandHeaderCount: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
   },
   productRow: {
     flexDirection: 'row',
