@@ -88,7 +88,7 @@ function BatchListView({
       if (result.success && result.data) {
         setBatches(result.data);
       } else {
-        Alert.alert('Алдаа', result.error || 'Багц татахад алдаа гарлаа');
+        Alert.alert('Алдаа', result.message || 'Багц татахад алдаа гарлаа');
       }
     } catch {
       Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
@@ -157,8 +157,16 @@ function BatchListView({
             <StatusBadge status={item.status} label={item.status_label} color={item.status_color} />
           </View>
 
-          {/* Gate */}
-          <Text style={styles.batchGate}>Хаалга: {item.gate_name}</Text>
+          {/* Warehouse + Gate row */}
+          <View style={styles.warehouseGateRow}>
+            <View style={styles.warehouseChip}>
+              <Text style={styles.warehouseChipText} numberOfLines={1}>{item.warehouse_name}</Text>
+            </View>
+            <ChevronRight size={12} color="#9CA3AF" />
+            <View style={styles.gateChip}>
+              <Text style={styles.gateChipText} numberOfLines={1}>{item.gate_name}</Text>
+            </View>
+          </View>
 
           {/* Stats row */}
           <View style={styles.batchStats}>
@@ -198,7 +206,10 @@ function BatchListView({
 
           {/* Date + arrow */}
           <View style={styles.batchCardBottom}>
-            <Text style={styles.batchDate}>{formatDate(item.created_at)}</Text>
+            <View style={styles.batchDateBlock}>
+              <Text style={styles.batchDateLabel}>Үүсгэсэн</Text>
+              <Text style={styles.batchDate}>{formatDate(item.created_at)}</Text>
+            </View>
             <ChevronRight size={18} color="#9CA3AF" />
           </View>
         </TouchableOpacity>
@@ -227,7 +238,7 @@ function BatchDetailView({
       if (result.success && result.data) {
         setDetail(result.data);
       } else {
-        Alert.alert('Алдаа', result.error || 'Мэдээлэл татахад алдаа гарлаа');
+        Alert.alert('Алдаа', result.message || 'Мэдээлэл татахад алдаа гарлаа');
       }
     } catch {
       Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
@@ -644,11 +655,38 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Bold',
     color: '#111827',
   },
-  batchGate: {
-    fontSize: 12,
-    fontFamily: 'GIP-Regular',
-    color: '#6B7280',
+  warehouseGateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 10,
+  },
+  warehouseChip: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  warehouseChipText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1D4ED8',
+    maxWidth: 140,
+  },
+  gateChip: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  gateChipText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#15803D',
   },
   batchStats: {
     flexDirection: 'row',
@@ -704,10 +742,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 4,
   },
-  batchDate: {
-    fontSize: 11,
+  batchDateBlock: {
+    flexDirection: 'column',
+    gap: 1,
+  },
+  batchDateLabel: {
+    fontSize: 10,
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
+  },
+  batchDate: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
   },
 
   // ── Detail ──

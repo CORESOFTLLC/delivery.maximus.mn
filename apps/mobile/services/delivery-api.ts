@@ -1288,6 +1288,7 @@ export interface WarehouseBatchItem {
   status: string;
   status_label: string;
   status_color: string;
+  warehouse_name: string;
   gate_name: string;
   total_orders: number;
   total_products: number;
