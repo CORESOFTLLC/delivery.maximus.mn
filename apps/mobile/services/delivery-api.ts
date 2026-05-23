@@ -1277,3 +1277,93 @@ export async function getTodayReport(params?: { date?: string; from?: string; to
   const qs = query.toString();
   return apiRequest(`/worker/today-report${qs ? `?${qs}` : ''}`);
 }
+
+// ==========================================================================
+// WAREHOUSE BATCH PREPARE MODULE — Агуулахын бараа бэлдэх
+// ==========================================================================
+
+export interface WarehouseBatchItem {
+  uuid: string;
+  batch_code: string;
+  status: string;
+  status_label: string;
+  status_color: string;
+  gate_name: string;
+  total_orders: number;
+  total_products: number;
+  total_quantity: number;
+  seri_day: number;
+  preparer_name: string | null;
+  checker_name: string | null;
+  created_at: string | null;
+  started_at: string | null;
+}
+
+export interface BatchProduct {
+  product_uuid: string;
+  name: string;
+  total_quantity: number;
+  order_count: number;
+  price: number;
+  total_amount: number;
+  series_uuid: string | null;
+  series_name: string | null;
+  series_expiry_date: string | null;
+  prep_status: 'new' | 'preparing' | 'prepared';
+  seri_days: number;
+  warehouse_checked: boolean;
+}
+
+export interface BatchEmployee {
+  name: string;
+  job: string | null;
+  avatar: string | null;
+}
+
+export interface WarehouseBatchDetail {
+  uuid: string;
+  batch_code: string;
+  status: string;
+  status_label: string;
+  status_color: string;
+  gate_name: string;
+  total_orders: number;
+  total_products: number;
+  total_quantity: number;
+  seri_day: number;
+  created_at: string | null;
+  started_at: string | null;
+  can_start_preparing: boolean;
+  can_mark_prepared: boolean;
+  preparer: BatchEmployee | null;
+  checker: BatchEmployee | null;
+  products: BatchProduct[];
+}
+
+/**
+ * Агуулахын багцуудын жагсаалт (тухайн ажилтанд хамаарах)
+ */
+export async function getWarehouseBatches(): Promise<{ success: boolean; data?: WarehouseBatchItem[]; meta?: { total: number; warehouse_worker_id: number | null }; error?: string }> {
+  return apiRequest('/warehouse/batches');
+}
+
+/**
+ * Батчын дэлгэрэнгүй мэдээлэл + бараанууд
+ */
+export async function getWarehouseBatchDetail(uuid: string): Promise<{ success: boolean; data?: WarehouseBatchDetail; error?: string }> {
+  return apiRequest(`/warehouse/batches/${uuid}`);
+}
+
+/**
+ * Бэлтгэл эхлүүлэх
+ */
+export async function startBatchPreparing(uuid: string): Promise<{ success: boolean; message?: string; status?: string; status_label?: string; error?: string }> {
+  return apiRequest(`/warehouse/batches/${uuid}/start-preparing`, { method: 'POST' });
+}
+
+/**
+ * Бэлтгэл дуусгах
+ */
+export async function markBatchPrepared(uuid: string): Promise<{ success: boolean; message?: string; status?: string; status_label?: string; error?: string }> {
+  return apiRequest(`/warehouse/batches/${uuid}/mark-prepared`, { method: 'POST' });
+}

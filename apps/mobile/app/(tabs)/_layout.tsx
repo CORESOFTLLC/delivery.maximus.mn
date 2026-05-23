@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Image, Platform, Text as RNText, ScrollView, Alert } from 'react-native';
-import { Warehouse, Truck, Menu, X, User, LogOut, ChevronRight, BarChart3, Home } from 'lucide-react-native';
+import { Warehouse, Truck, Menu, X, User, LogOut, ChevronRight, BarChart3, Home, Package } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { version as appVersion } from '../../package.json';
 import { useAuthStore } from '../../stores/delivery-auth-store';
@@ -170,6 +170,9 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
 export default function TabsLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { employeeDetail } = useAuthStore();
+  // Агуулахын ажилтан бол (хаалганы ажилтан / нярав) Бэлдэх таб харуулна
+  const isWarehouseWorker = (employeeDetail?.warehouses?.length ?? 0) > 0;
 
   return (
     <>
@@ -231,7 +234,18 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Hidden screens - for navigation but not in tab bar */}
+        {/* Бэлдэх Tab - Warehouse batch preparation (агуулахын ажилтан / нярав) */}
+        <Tabs.Screen
+          name="prepare"
+          options={{
+            title: 'Бэлдэх',
+            headerTitle: 'Бараа бэлдэх',
+            href: isWarehouseWorker ? undefined : null,
+            tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
+          }}
+        />
+
+        {/* Hidden screens - for navigation but not in tab bar */
         <Tabs.Screen
           name="index"
           options={{
