@@ -1318,6 +1318,19 @@ export interface BatchProduct {
   barcode: string | null;
   product_code: string | null;
   brand_name: string | null;
+  preparer_note: string | null;
+  series_request_uuid: string | null;
+  series_request_name: string | null;
+  series_request_expiry_date: string | null;
+  series_request_note: string | null;
+  series_request_status: 'pending' | 'approved' | 'rejected' | null;
+}
+
+export interface BridgeSeries {
+  uuid: string;
+  name: string;
+  expireDate: string | null;
+  quantity: number;
 }
 
 export interface BatchEmployee {
@@ -1372,4 +1385,42 @@ export async function startBatchPreparing(uuid: string): Promise<{ success: bool
  */
 export async function markBatchPrepared(uuid: string): Promise<{ success: boolean; message?: string; status?: string; status_label?: string; error?: string }> {
   return apiRequest(`/warehouse/batches/${uuid}/mark-prepared`, { method: 'POST' });
+}
+
+/**
+ * Бараа бэлдсэн / бэлдээгүй toggle
+ */
+export async function toggleProductPrep(batchUuid: string, productUuid: string): Promise<{ success: boolean; prep_status?: string; error?: string }> {
+  return apiRequest(`/warehouse/batches/${batchUuid}/products/${productUuid}/toggle-prep`, { method: 'PATCH' });
+}
+
+/**
+ * Бараа бэлдэгчийн тайлбар хадгалах
+ */
+export async function savePreparerNote(batchUuid: string, productUuid: string, note: string): Promise<{ success: boolean; error?: string }> {
+  return apiRequest(`/warehouse/batches/${batchUuid}/products/${productUuid}/note`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note }),
+  });
+}
+
+/**
+ * Барааны боломжит серийн жагсаалт авах
+ */
+export async function getProductSeries(batchUuid: string, productUuid: string): Promise<{ success: boolean; series?: BridgeSeries[]; error?: string }> {
+  return apiRequest(`/warehouse/batches/${batchUuid}/products/${productUuid}/series`);
+}
+
+/**
+ * Сери хүсэлт илгээх (нярав батална)
+ */
+export async function submitSeriesRequest(
+  batchUuid: string,
+  productUuid: string,
+  payload: { series_uuid: string; series_name: string; series_expiry_date: string | null; note: string }
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  return apiRequest(`/warehouse/batches/${batchUuid}/products/${productUuid}/series-request`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }

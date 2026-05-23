@@ -331,12 +331,8 @@ const styles = StyleSheet.create({
   },
   packageCardCompleted: {
     backgroundColor: '#ECFDF5',
-    borderWidth: 2,
-    borderColor: '#10B981',
   },
   packageCardPending: {
-    borderWidth: 2,
-    borderColor: '#F59E0B',
   },
   packageIconContainer: {
     width: 56,

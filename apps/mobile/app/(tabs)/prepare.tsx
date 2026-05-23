@@ -18,6 +18,9 @@ import {
   Platform,
   ScrollView,
   Image,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {
   Package,
@@ -35,15 +38,24 @@ import {
   User,
   Shield,
   DoorOpen,
+  MessageSquare,
+  GitBranch,
+  X,
+  Check,
 } from 'lucide-react-native';
 import {
   getWarehouseBatches,
   getWarehouseBatchDetail,
   startBatchPreparing,
   markBatchPrepared,
+  toggleProductPrep,
+  savePreparerNote,
+  getProductSeries,
+  submitSeriesRequest,
   WarehouseBatchItem,
   WarehouseBatchDetail,
   BatchProduct,
+  BridgeSeries,
 } from '../../services/delivery-api';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 85 : 65;
@@ -234,6 +246,24 @@ function BatchDetailView({
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
+  // Prep toggle per product
+  const [togglingUuids, setTogglingUuids] = useState<Set<string>>(new Set());
+
+  // Note modal
+  const [noteModal, setNoteModal] = useState<{ productUuid: string; note: string } | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  // Series request modal
+  const [seriesModal, setSeriesModal] = useState<{
+    productUuid: string;
+    productName: string;
+    series: BridgeSeries[];
+    loading: boolean;
+    selected: BridgeSeries | null;
+    note: string;
+  } | null>(null);
+  const [seriesSubmitting, setSeriesSubmitting] = useState(false);
+
   const fetchDetail = useCallback(async () => {
     try {
       const result = await getWarehouseBatchDetail(uuid);
@@ -299,6 +329,127 @@ function BatchDetailView({
     ]);
   };
 
+  const handleTogglePrep = useCallback(async (productUuid: string) => {
+    setTogglingUuids((s) => new Set(s).add(productUuid));
+    try {
+      const r = await toggleProductPrep(uuid, productUuid);
+      if (r.success) {
+        setDetail((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            products: prev.products.map((p) =>
+              p.product_uuid === productUuid
+                ? { ...p, prep_status: r.prep_status as 'new' | 'prepared' }
+                : p
+            ),
+          };
+        });
+      } else {
+        Alert.alert('Алдаа', r.error || 'Алдаа гарлаа');
+      }
+    } catch {
+      Alert.alert('Алдаа', 'Сүлжээний алдаа');
+    } finally {
+      setTogglingUuids((s) => { const ns = new Set(s); ns.delete(productUuid); return ns; });
+    }
+  }, [uuid]);
+
+  const handleOpenNote = useCallback((productUuid: string) => {
+    const p = detail?.products.find((x) => x.product_uuid === productUuid);
+    setNoteModal({ productUuid, note: p?.preparer_note ?? '' });
+  }, [detail]);
+
+  const handleSaveNote = useCallback(async () => {
+    if (!noteModal) return;
+    setNoteSaving(true);
+    try {
+      const r = await savePreparerNote(uuid, noteModal.productUuid, noteModal.note);
+      if (r.success) {
+        setDetail((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            products: prev.products.map((p) =>
+              p.product_uuid === noteModal.productUuid
+                ? { ...p, preparer_note: noteModal.note || null }
+                : p
+            ),
+          };
+        });
+        setNoteModal(null);
+      } else {
+        Alert.alert('Алдаа', r.error || 'Алдаа гарлаа');
+      }
+    } catch {
+      Alert.alert('Алдаа', 'Сүлжээний алдаа');
+    } finally {
+      setNoteSaving(false);
+    }
+  }, [uuid, noteModal]);
+
+  const handleOpenSeriesRequest = useCallback(async (productUuid: string) => {
+    const p = detail?.products.find((x) => x.product_uuid === productUuid);
+    setSeriesModal({
+      productUuid,
+      productName: p?.name ?? '',
+      series: [],
+      loading: true,
+      selected: null,
+      note: p?.series_request_note ?? '',
+    });
+    try {
+      const r = await getProductSeries(uuid, productUuid);
+      setSeriesModal((prev) => prev ? { ...prev, series: r.series ?? [], loading: false } : null);
+    } catch {
+      setSeriesModal((prev) => prev ? { ...prev, loading: false } : null);
+    }
+  }, [uuid, detail]);
+
+  const handleSubmitSeriesRequest = useCallback(async () => {
+    if (!seriesModal?.selected) {
+      Alert.alert('Анхааруулга', 'Сери сонгоно уу');
+      return;
+    }
+    setSeriesSubmitting(true);
+    try {
+      const r = await submitSeriesRequest(uuid, seriesModal.productUuid, {
+        series_uuid: seriesModal.selected.uuid,
+        series_name: seriesModal.selected.name,
+        series_expiry_date: seriesModal.selected.expireDate,
+        note: seriesModal.note,
+      });
+      if (r.success) {
+        setDetail((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            products: prev.products.map((p) =>
+              p.product_uuid === seriesModal.productUuid
+                ? {
+                    ...p,
+                    series_request_uuid: seriesModal.selected!.uuid,
+                    series_request_name: seriesModal.selected!.name,
+                    series_request_expiry_date: seriesModal.selected!.expireDate,
+                    series_request_note: seriesModal.note || null,
+                    series_request_status: 'pending',
+                  }
+                : p
+            ),
+          };
+        });
+        setSeriesModal(null);
+        Alert.alert('Амжилттай', 'Сери хүсэлт илгээгдлээ. Нярав батална.');
+      } else {
+        Alert.alert('Алдаа', r.error || 'Алдаа гарлаа');
+      }
+    } catch {
+      Alert.alert('Алдаа', 'Сүлжээний алдаа');
+    } finally {
+      setSeriesSubmitting(false);
+    }
+  }, [uuid, seriesModal]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -324,6 +475,7 @@ function BatchDetailView({
   const preparedProducts = detail.products.filter((p) => p.prep_status === 'prepared').length;
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={styles.detailContainer}
       contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 24 }}
@@ -479,7 +631,15 @@ function BatchDetailView({
                   <Text style={styles.brandHeaderCount}>{grouped.get(brand)!.length} нэр</Text>
                 </View>
                 {grouped.get(brand)!.map((product) => (
-                  <ProductRow key={product.product_uuid} product={product} index={globalIdx++} />
+                  <ProductRow
+                    key={product.product_uuid}
+                    product={product}
+                    index={globalIdx++}
+                    toggling={togglingUuids.has(product.product_uuid)}
+                    onTogglePrep={handleTogglePrep}
+                    onOpenNote={handleOpenNote}
+                    onOpenSeriesRequest={handleOpenSeriesRequest}
+                  />
                 ))}
               </View>
             ))}
@@ -487,6 +647,106 @@ function BatchDetailView({
         );
       })()}
     </ScrollView>
+
+    {/* ── Note Modal ── */}
+    <Modal visible={noteModal !== null} transparent animationType="slide" onRequestClose={() => setNoteModal(null)}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Тайлбар нэмэх</Text>
+            <TouchableOpacity onPress={() => setNoteModal(null)}>
+              <X size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.noteInput}
+            value={noteModal?.note ?? ''}
+            onChangeText={(t) => setNoteModal((prev) => prev ? { ...prev, note: t } : null)}
+            placeholder="Тайлбар бичнэ үү..."
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={[styles.modalSubmitBtn, noteSaving && { opacity: 0.6 }]}
+            onPress={handleSaveNote}
+            disabled={noteSaving}
+          >
+            {noteSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalSubmitText}>Хадгалах</Text>}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+
+    {/* ── Series Request Modal ── */}
+    <Modal visible={seriesModal !== null} transparent animationType="slide" onRequestClose={() => setSeriesModal(null)}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '80%' }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle} numberOfLines={1}>Сери хүсэлт</Text>
+            <TouchableOpacity onPress={() => setSeriesModal(null)}>
+              <X size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          {seriesModal?.loading ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <ActivityIndicator color="#2563EB" />
+              <Text style={styles.loadingText}>Сери татаж байна...</Text>
+            </View>
+          ) : (seriesModal?.series?.length ?? 0) === 0 ? (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <AlertCircle size={32} color="#D97706" />
+              <Text style={{ marginTop: 8, color: '#6B7280', fontFamily: 'GIP-Regular', fontSize: 13 }}>
+                Боломжит сери олдсонгүй
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+              {seriesModal!.series.map((s) => {
+                const isSelected = seriesModal?.selected?.uuid === s.uuid;
+                return (
+                  <TouchableOpacity
+                    key={s.uuid}
+                    style={[styles.seriesItem, isSelected && styles.seriesItemSelected]}
+                    onPress={() => setSeriesModal((prev) => prev ? { ...prev, selected: s } : null)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.seriesItemName, isSelected && { color: '#2563EB' }]}>{s.name}</Text>
+                      <Text style={styles.seriesItemMeta}>
+                        {s.expireDate ? s.expireDate.slice(0, 10) : '—'} · {s.quantity.toLocaleString()} ш
+                      </Text>
+                    </View>
+                    {isSelected && <Check size={16} color="#2563EB" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+          <TextInput
+            style={[styles.noteInput, { marginTop: 12 }]}
+            value={seriesModal?.note ?? ''}
+            onChangeText={(t) => setSeriesModal((prev) => prev ? { ...prev, note: t } : null)}
+            placeholder="Нэмэлт тайлбар (заавал биш)..."
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={[styles.modalSubmitBtn, (!seriesModal?.selected || seriesSubmitting) && { opacity: 0.5 }]}
+            onPress={handleSubmitSeriesRequest}
+            disabled={!seriesModal?.selected || seriesSubmitting}
+          >
+            {seriesSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.modalSubmitText}>Хүсэлт илгээх</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  </View>
   );
 }
 
@@ -542,20 +802,23 @@ function PersonRow({
   );
 }
 
-function ProductRow({ product, index }: { product: BatchProduct; index: number }) {
-  const prepColor =
-    product.prep_status === 'prepared'
-      ? '#10B981'
-      : product.prep_status === 'preparing'
-      ? '#F59E0B'
-      : '#9CA3AF';
-
-  const prepLabel =
-    product.prep_status === 'prepared'
-      ? 'Бэлтгэгдсэн'
-      : product.prep_status === 'preparing'
-      ? 'Бэлдэж байна'
-      : 'Хүлээгдэж байна';
+function ProductRow({
+  product,
+  index,
+  toggling,
+  onTogglePrep,
+  onOpenNote,
+  onOpenSeriesRequest,
+}: {
+  product: BatchProduct;
+  index: number;
+  toggling: boolean;
+  onTogglePrep: (productUuid: string) => void;
+  onOpenNote: (productUuid: string) => void;
+  onOpenSeriesRequest: (productUuid: string) => void;
+}) {
+  const isPrepared = product.prep_status === 'prepared';
+  const prepColor = isPrepared ? '#10B981' : product.prep_status === 'preparing' ? '#F59E0B' : '#9CA3AF';
 
   const initials = product.name
     .split(' ')
@@ -563,6 +826,14 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
     .map((w) => w[0] ?? '')
     .join('')
     .toUpperCase();
+
+  const hasSeriesRequest = product.series_request_uuid !== null;
+  const requestStatusColor =
+    product.series_request_status === 'approved'
+      ? '#10B981'
+      : product.series_request_status === 'rejected'
+      ? '#EF4444'
+      : '#F59E0B';
 
   return (
     <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
@@ -606,7 +877,64 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
                 <Text style={styles.productSeriesWarn}>Сери оноогдоогүй ({product.seri_days}хн)</Text>
               </View>
             ) : null}
-            <Text style={[styles.productPrepStatus, { color: prepColor }]}>{prepLabel}</Text>
+            {/* Series request badge */}
+            {hasSeriesRequest && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                <GitBranch size={10} color={requestStatusColor} />
+                <Text style={[styles.productCodes, { color: requestStatusColor }]}>
+                  {product.series_request_name}
+                  {product.series_request_status === 'pending' ? ' (хүлээгдэж буй)' : product.series_request_status === 'approved' ? ' (батлагдсан)' : ' (татгалзсан)'}
+                </Text>
+              </View>
+            )}
+            {/* Preparer note */}
+            {product.preparer_note ? (
+              <Text style={styles.productCodes} numberOfLines={2}>
+                {product.preparer_note}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Action buttons row */}
+          <View style={styles.productActions}>
+            {/* Prep toggle */}
+            <TouchableOpacity
+              style={[styles.prepToggleBtn, isPrepared && styles.prepToggleBtnDone]}
+              onPress={() => onTogglePrep(product.product_uuid)}
+              disabled={toggling}
+              activeOpacity={0.7}
+            >
+              {toggling ? (
+                <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
+              ) : (
+                <>
+                  <Check size={12} color={isPrepared ? '#fff' : '#9CA3AF'} />
+                  <Text style={[styles.prepToggleBtnText, isPrepared && styles.prepToggleBtnTextDone]}>
+                    {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Note button */}
+            <TouchableOpacity
+              style={[styles.productActionBtn, product.preparer_note ? styles.productActionBtnActive : null]}
+              onPress={() => onOpenNote(product.product_uuid)}
+              activeOpacity={0.7}
+            >
+              <MessageSquare size={13} color={product.preparer_note ? '#2563EB' : '#9CA3AF'} />
+            </TouchableOpacity>
+
+            {/* Series request button — only when series is missing */}
+            {!product.series_uuid && product.seri_days > 0 && (
+              <TouchableOpacity
+                style={[styles.productActionBtn, hasSeriesRequest ? styles.productActionBtnActive : null]}
+                onPress={() => onOpenSeriesRequest(product.product_uuid)}
+                activeOpacity={0.7}
+              >
+                <GitBranch size={13} color={hasSeriesRequest ? '#F59E0B' : '#9CA3AF'} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -1174,6 +1502,122 @@ const styles = StyleSheet.create({
   productPrepStatus: {
     fontSize: 11,
     fontFamily: 'GIP-SemiBold',
+  },
+  productActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  prepToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+  },
+  prepToggleBtnDone: {
+    borderColor: '#10B981',
+    backgroundColor: '#10B981',
+  },
+  prepToggleBtnText: {
+    fontSize: 11,
+    fontFamily: 'GIP-SemiBold',
+    color: '#9CA3AF',
+  },
+  prepToggleBtnTextDone: {
+    color: '#fff',
+  },
+  productActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productActionBtnActive: {
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+  },
+
+  // ── Modals ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontFamily: 'GIP-Bold',
+    color: '#111827',
+    flex: 1,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 13,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+    minHeight: 80,
+  },
+  modalSubmitBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  modalSubmitText: {
+    color: '#fff',
+    fontFamily: 'GIP-SemiBold',
+    fontSize: 14,
+  },
+  seriesItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 6,
+  },
+  seriesItemSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  seriesItemName: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
+  },
+  seriesItemMeta: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   productRight: {
     alignItems: 'center',

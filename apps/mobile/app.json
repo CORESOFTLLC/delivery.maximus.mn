@@ -45,6 +45,9 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -74,6 +77,12 @@
         "projectId": "feac7565-6cde-40b0-8cd5-cf5729a9bae9"
       }
     },
-    "owner": "buderdene"
+    "owner": "buderdene",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/feac7565-6cde-40b0-8cd5-cf5729a9bae9"
+    }
   }
 }

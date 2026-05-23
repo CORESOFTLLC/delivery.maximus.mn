@@ -325,8 +325,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardToday: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#2563EB',
   },
 
   /* Card top row */
