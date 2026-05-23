@@ -852,14 +852,6 @@ function ProductRow({
   onOpenSeriesRequest: (productUuid: string) => void;
 }) {
   const isPrepared = product.prep_status === 'prepared';
-  const prepColor = isPrepared ? '#10B981' : product.prep_status === 'preparing' ? '#F59E0B' : '#9CA3AF';
-
-  const initials = product.name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase();
 
   const hasSeriesRequest = product.series_request_uuid !== null;
   const requestStatusColor =
@@ -870,109 +862,147 @@ function ProductRow({
       : '#F59E0B';
 
   return (
-    <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
-      {/* Left: image + name */}
-      <View style={styles.productLeft}>
-        <View style={styles.productImageWrap}>
-          {product.image_url ? (
-            <Image
-              source={{ uri: product.image_url }}
-              style={styles.productImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.productImagePlaceholder, { backgroundColor: prepColor + '22' }]}>
-              <Text style={[styles.productImageInitials, { color: prepColor }]}>{initials}</Text>
-            </View>
-          )}
+    <View style={styles.productCard}>
+      {/* ── Header: index badge + name + prep chip ── */}
+      <View style={styles.productCardHeader}>
+        <View style={styles.productCardIndexBadge}>
+          <Text style={styles.productCardIndexText}>#{index + 1}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.productName} numberOfLines={2}>
-            {product.name}
-          </Text>
-          <View style={styles.productMeta}>
-            {product.bridge_name ? (
-              <Text style={styles.productBridgeName} numberOfLines={1}>{product.bridge_name}</Text>
-            ) : null}
-            {(product.barcode || product.product_code) ? (
-              <Text style={styles.productCodes} numberOfLines={1}>
-                {[product.barcode, product.product_code].filter(Boolean).join(' · ')}
-              </Text>
-            ) : null}
-            {product.series_expiry_date ? (
-              <Text style={styles.productSeries} numberOfLines={1}>
-                {product.series_expiry_date.slice(0, 10)}
-              </Text>
-            ) : product.series_name ? (
-              <Text style={styles.productSeries} numberOfLines={1}>{product.series_name}</Text>
-            ) : product.seri_days > 0 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <AlertCircle size={11} color="#D97706" />
-                <Text style={styles.productSeriesWarn}>Сери оноогдоогүй ({product.seri_days}хн)</Text>
-              </View>
-            ) : null}
-            {/* Series request badge */}
-            {hasSeriesRequest && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
-                <GitBranch size={10} color={requestStatusColor} />
-                <Text style={[styles.productCodes, { color: requestStatusColor }]}>
-                  {product.series_request_name}
-                  {product.series_request_status === 'pending' ? ' (хүлээгдэж буй)' : product.series_request_status === 'approved' ? ' (батлагдсан)' : ' (татгалзсан)'}
-                </Text>
-              </View>
-            )}
-            {/* Preparer note */}
-            {product.preparer_note ? (
-              <Text style={styles.productCodes} numberOfLines={2}>
-                {product.preparer_note}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Action buttons row */}
-          <View style={styles.productActions}>
-            {/* Note button */}
-            <TouchableOpacity
-              style={[styles.productActionBtn, product.preparer_note ? styles.productActionBtnActive : null]}
-              onPress={() => onOpenNote(product.product_uuid)}
-              activeOpacity={0.7}
-            >
-              <MessageSquare size={13} color={product.preparer_note ? '#2563EB' : '#9CA3AF'} />
-            </TouchableOpacity>
-
-            {/* Series request button — only when series is missing */}
-            {!product.series_uuid && product.seri_days > 0 && (
-              <TouchableOpacity
-                style={[styles.productActionBtn, hasSeriesRequest ? styles.productActionBtnActive : null]}
-                onPress={() => onOpenSeriesRequest(product.product_uuid)}
-                activeOpacity={0.7}
-              >
-                <GitBranch size={13} color={hasSeriesRequest ? '#F59E0B' : '#9CA3AF'} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Right: qty + prep check circle */}
-      <View style={styles.productRight}>
-        <Text style={styles.productQty}>{product.total_quantity.toLocaleString()}</Text>
-        <Text style={styles.productQtyLabel}>ш</Text>
-        {product.warehouse_checked && (
-          <CheckCheck size={13} color="#10B981" style={{ marginTop: 2 }} />
-        )}
+        <Text style={styles.productCardName} numberOfLines={2}>{product.name}</Text>
         <TouchableOpacity
-          style={[styles.prepCheckCircle, isPrepared && styles.prepCheckCircleDone]}
+          style={[styles.prepChip, isPrepared && styles.prepChipDone]}
           onPress={() => onTogglePrep(product.product_uuid)}
           disabled={toggling}
           activeOpacity={0.7}
         >
           {toggling ? (
-            <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
-          ) : isPrepared ? (
-            <Check size={18} color="#fff" />
-          ) : null}
+            <ActivityIndicator size="small" color={isPrepared ? '#10B981' : '#9CA3AF'} />
+          ) : (
+            <>
+              <Check size={11} color={isPrepared ? '#10B981' : '#9CA3AF'} />
+              <Text style={[styles.prepChipText, isPrepared && styles.prepChipTextDone]}>
+                {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
+      </View>
+
+      {/* ── Body: thumbnail + info + qty ── */}
+      <View style={styles.productCardBody}>
+        {/* Thumbnail */}
+        <View style={styles.productCardThumb}>
+          {product.image_url ? (
+            <Image source={{ uri: product.image_url }} style={styles.productCardThumbImg} resizeMode="cover" />
+          ) : (
+            <View style={styles.productCardThumbPlaceholder}>
+              <Package size={22} color="#D1D5DB" />
+            </View>
+          )}
+        </View>
+
+        {/* Info */}
+        <View style={{ flex: 1, gap: 4 }}>
+          {product.bridge_name ? (
+            <Text style={styles.productCardBridge} numberOfLines={1}>{product.bridge_name}</Text>
+          ) : null}
+
+          {/* Code chips */}
+          {(product.barcode || product.product_code) ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+              {product.barcode ? (
+                <View style={styles.productCodeChip}>
+                  <Text style={styles.productCodeChipText}>{product.barcode}</Text>
+                </View>
+              ) : null}
+              {product.product_code ? (
+                <View style={styles.productCodeChip}>
+                  <Hash size={9} color="#6B7280" />
+                  <Text style={styles.productCodeChipText}>{product.product_code}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Series */}
+          {product.series_expiry_date ? (
+            <View style={styles.productSeriesChip}>
+              <Text style={styles.productSeriesChipText}>
+                {product.series_name ?? ''} · {product.series_expiry_date.slice(0, 10)}
+              </Text>
+            </View>
+          ) : product.series_name ? (
+            <View style={styles.productSeriesChip}>
+              <Text style={styles.productSeriesChipText}>{product.series_name}</Text>
+            </View>
+          ) : product.seri_days > 0 ? (
+            <View style={styles.productSeriesWarnChip}>
+              <AlertCircle size={10} color="#D97706" />
+              <Text style={styles.productSeriesWarnChipText}>
+                Сери оноогдоогүй ({product.seri_days}хн)
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Series request chip */}
+          {hasSeriesRequest ? (
+            <View style={[styles.productSeriesReqChip, { borderColor: requestStatusColor + '66' }]}>
+              <GitBranch size={10} color={requestStatusColor} />
+              <Text style={[styles.productSeriesReqChipText, { color: requestStatusColor }]} numberOfLines={1}>
+                {product.series_request_name}
+                {product.series_request_status === 'pending'
+                  ? ' · хүлээгдэж буй'
+                  : product.series_request_status === 'approved'
+                  ? ' · батлагдсан'
+                  : ' · татгалзсан'}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Preparer note */}
+          {product.preparer_note ? (
+            <View style={styles.productNoteChip}>
+              <MessageSquare size={10} color="#2563EB" />
+              <Text style={styles.productNoteChipText} numberOfLines={2}>{product.preparer_note}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Qty */}
+        <View style={styles.productCardQty}>
+          <Text style={styles.productCardQtyNum}>{product.total_quantity.toLocaleString()}</Text>
+          <Text style={styles.productCardQtyLabel}>ш</Text>
+          {product.warehouse_checked ? (
+            <CheckCheck size={14} color="#10B981" style={{ marginTop: 2 }} />
+          ) : null}
+        </View>
+      </View>
+
+      {/* ── Footer: action buttons ── */}
+      <View style={styles.productCardFooter}>
+        <TouchableOpacity
+          style={[styles.productCardActionBtn, product.preparer_note ? styles.productCardActionBtnActive : null]}
+          onPress={() => onOpenNote(product.product_uuid)}
+          activeOpacity={0.7}
+        >
+          <MessageSquare size={13} color={product.preparer_note ? '#2563EB' : '#9CA3AF'} />
+          <Text style={[styles.productCardActionText, product.preparer_note ? { color: '#2563EB' } : null]}>
+            Тайлбар
+          </Text>
+        </TouchableOpacity>
+
+        {!product.series_uuid && product.seri_days > 0 ? (
+          <TouchableOpacity
+            style={[styles.productCardActionBtn, hasSeriesRequest ? styles.productCardActionBtnActive : null]}
+            onPress={() => onOpenSeriesRequest(product.product_uuid)}
+            activeOpacity={0.7}
+          >
+            <GitBranch size={13} color={hasSeriesRequest ? '#F59E0B' : '#9CA3AF'} />
+            <Text style={[styles.productCardActionText, hasSeriesRequest ? { color: '#F59E0B' } : null]}>
+              Сери хүсэлт
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -1577,72 +1607,231 @@ const styles = StyleSheet.create({
   productMeta: {
     gap: 2,
   },
-  productSeries: {
-    fontSize: 11,
-    fontFamily: 'GIP-Regular',
-    color: '#6B7280',
+  // ── Product Card ──
+  productCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+    overflow: 'hidden',
   },
-  productBridgeName: {
-    fontSize: 11,
-    fontFamily: 'GIP-Regular',
-    color: '#374151',
+  productCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  productCodes: {
-    fontSize: 10,
-    fontFamily: 'GIP-Regular',
-    color: '#9CA3AF',
+  productCardIndexBadge: {
+    backgroundColor: '#111827',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    flexShrink: 0,
   },
-  productSeriesWarn: {
+  productCardIndexText: {
     fontSize: 11,
-    fontFamily: 'GIP-Regular',
-    color: '#D97706',
+    fontFamily: 'GIP-Bold',
+    color: '#fff',
   },
-  productPrepStatus: {
-    fontSize: 11,
+  productCardName: {
+    flex: 1,
+    fontSize: 13,
     fontFamily: 'GIP-SemiBold',
+    color: '#111827',
+    lineHeight: 18,
   },
-  productActions: {
+  prepChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  prepToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     backgroundColor: '#F9FAFB',
+    flexShrink: 0,
   },
-  prepToggleBtnDone: {
-    borderColor: '#10B981',
-    backgroundColor: '#10B981',
+  prepChipDone: {
+    borderColor: '#6EE7B7',
+    backgroundColor: '#ECFDF5',
   },
-  prepToggleBtnText: {
+  prepChipText: {
     fontSize: 11,
     fontFamily: 'GIP-SemiBold',
     color: '#9CA3AF',
   },
-  prepToggleBtnTextDone: {
-    color: '#fff',
+  prepChipTextDone: {
+    color: '#10B981',
   },
-  productActionBtn: {
-    width: 28,
-    height: 28,
+  productCardBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  productCardThumb: {
+    width: 52,
+    height: 52,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  productCardThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  productCardThumbPlaceholder: {
+    width: '100%',
+    height: '100%',
     backgroundColor: '#F9FAFB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productActionBtnActive: {
+  productCardBridge: {
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
+  },
+  productCodeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  productCodeChipText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
+  },
+  productSeriesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    backgroundColor: '#ECFDF5',
+    alignSelf: 'flex-start',
+  },
+  productSeriesChipText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#059669',
+  },
+  productSeriesWarnChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    alignSelf: 'flex-start',
+  },
+  productSeriesWarnChipText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#D97706',
+  },
+  productSeriesReqChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: '#FFFBEB',
+    alignSelf: 'flex-start',
+  },
+  productSeriesReqChipText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+  },
+  productNoteChip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
     borderColor: '#BFDBFE',
     backgroundColor: '#EFF6FF',
+    alignSelf: 'flex-start',
+  },
+  productNoteChipText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#2563EB',
+    flex: 1,
+  },
+  productCardQty: {
+    alignItems: 'center',
+    flexShrink: 0,
+    minWidth: 36,
+  },
+  productCardQtyNum: {
+    fontSize: 20,
+    fontFamily: 'GIP-Bold',
+    color: '#111827',
+  },
+  productCardQtyLabel: {
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#9CA3AF',
+  },
+  productCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  productCardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  productCardActionBtnActive: {
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+  },
+  productCardActionText: {
+    fontSize: 11,
+    fontFamily: 'GIP-SemiBold',
+    color: '#9CA3AF',
   },
 
   // ── Modals ──
@@ -1716,20 +1905,5 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
     marginTop: 2,
-  },
-  productRight: {
-    alignItems: 'center',
-    minWidth: 48,
-    paddingLeft: 8,
-  },
-  productQty: {
-    fontSize: 18,
-    fontFamily: 'GIP-Bold',
-    color: '#111827',
-  },
-  productQtyLabel: {
-    fontSize: 10,
-    fontFamily: 'GIP-Regular',
-    color: '#9CA3AF',
   },
 });
