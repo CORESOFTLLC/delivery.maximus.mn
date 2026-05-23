@@ -837,20 +837,6 @@ function ProductRow({
 
   return (
     <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
-      {/* Prep check circle — far left */}
-      <TouchableOpacity
-        style={[styles.prepCheckCircle, isPrepared && styles.prepCheckCircleDone]}
-        onPress={() => onTogglePrep(product.product_uuid)}
-        disabled={toggling}
-        activeOpacity={0.7}
-      >
-        {toggling ? (
-          <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
-        ) : isPrepared ? (
-          <Check size={18} color="#fff" />
-        ) : null}
-      </TouchableOpacity>
-
       {/* Left: image + name */}
       <View style={styles.productLeft}>
         <View style={styles.productImageWrap}>
@@ -934,13 +920,25 @@ function ProductRow({
         </View>
       </View>
 
-      {/* Right: qty */}
+      {/* Right: qty + prep check circle */}
       <View style={styles.productRight}>
         <Text style={styles.productQty}>{product.total_quantity.toLocaleString()}</Text>
         <Text style={styles.productQtyLabel}>ш</Text>
         {product.warehouse_checked && (
           <CheckCheck size={13} color="#10B981" style={{ marginTop: 2 }} />
         )}
+        <TouchableOpacity
+          style={[styles.prepCheckCircle, isPrepared && styles.prepCheckCircleDone]}
+          onPress={() => onTogglePrep(product.product_uuid)}
+          disabled={toggling}
+          activeOpacity={0.7}
+        >
+          {toggling ? (
+            <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
+          ) : isPrepared ? (
+            <Check size={18} color="#fff" />
+          ) : null}
+        </TouchableOpacity>
       </View>
     </View>
   );
