@@ -837,6 +837,20 @@ function ProductRow({
 
   return (
     <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
+      {/* Prep check circle — far left */}
+      <TouchableOpacity
+        style={[styles.prepCheckCircle, isPrepared && styles.prepCheckCircleDone]}
+        onPress={() => onTogglePrep(product.product_uuid)}
+        disabled={toggling}
+        activeOpacity={0.7}
+      >
+        {toggling ? (
+          <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
+        ) : isPrepared ? (
+          <Check size={18} color="#fff" />
+        ) : null}
+      </TouchableOpacity>
+
       {/* Left: image + name */}
       <View style={styles.productLeft}>
         <View style={styles.productImageWrap}>
@@ -897,25 +911,6 @@ function ProductRow({
 
           {/* Action buttons row */}
           <View style={styles.productActions}>
-            {/* Prep toggle */}
-            <TouchableOpacity
-              style={[styles.prepToggleBtn, isPrepared && styles.prepToggleBtnDone]}
-              onPress={() => onTogglePrep(product.product_uuid)}
-              disabled={toggling}
-              activeOpacity={0.7}
-            >
-              {toggling ? (
-                <ActivityIndicator size="small" color={isPrepared ? '#fff' : '#9CA3AF'} />
-              ) : (
-                <>
-                  <Check size={12} color={isPrepared ? '#fff' : '#9CA3AF'} />
-                  <Text style={[styles.prepToggleBtnText, isPrepared && styles.prepToggleBtnTextDone]}>
-                    {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
             {/* Note button */}
             <TouchableOpacity
               style={[styles.productActionBtn, product.preparer_note ? styles.productActionBtnActive : null]}
@@ -1426,10 +1421,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    gap: 10,
+  },
+  prepCheckCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  prepCheckCircleDone: {
+    borderColor: '#10B981',
+    backgroundColor: '#10B981',
   },
   productRowEven: {
     backgroundColor: '#FAFAFA',
