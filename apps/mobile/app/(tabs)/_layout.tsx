@@ -245,7 +245,7 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Hidden screens - for navigation but not in tab bar */
+        {/* Hidden screens - for navigation but not in tab bar */}
         <Tabs.Screen
           name="index"
           options={{
