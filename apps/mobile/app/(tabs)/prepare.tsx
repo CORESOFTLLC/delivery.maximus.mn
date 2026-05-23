@@ -245,6 +245,7 @@ function BatchDetailView({
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const [prepFilter, setPrepFilter] = useState<'all' | 'prepared' | 'unprepared'>('all');
 
   // Prep toggle per product
   const [togglingUuids, setTogglingUuids] = useState<Set<string>>(new Set());
@@ -568,6 +569,34 @@ function BatchDetailView({
       )}
 
       {/* Products List */}
+      <View style={styles.prepFilterTabs}>
+        {(
+          [['all', 'Бүгд'], ['prepared', 'Бэлдсэн'], ['unprepared', 'Бэлдээгүй']] as const
+        ).map(([key, label]) => {
+          const count = key === 'all'
+            ? detail.products.length
+            : key === 'prepared'
+            ? detail.products.filter((p) => p.prep_status === 'prepared').length
+            : detail.products.filter((p) => p.prep_status !== 'prepared').length;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.prepFilterTab, prepFilter === key && styles.prepFilterTabActive]}
+              onPress={() => setPrepFilter(key)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.prepFilterTabText, prepFilter === key && styles.prepFilterTabTextActive]}>
+                {label}
+              </Text>
+              <View style={[styles.prepFilterBadge, prepFilter === key && styles.prepFilterBadgeActive]}>
+                <Text style={[styles.prepFilterBadgeText, prepFilter === key && styles.prepFilterBadgeTextActive]}>
+                  {count}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
       <Text style={styles.sectionTitle}>Бараануудын жагсаалт ({detail.products.length})</Text>
 
       {(() => {
@@ -578,9 +607,14 @@ function BatchDetailView({
 
         // Group by brand, sort groups and products alphabetically
         const grouped = new Map<string, typeof detail.products>();
-        const filtered = selectedBrand
-          ? detail.products.filter((p) => (p.brand_name ?? '—') === selectedBrand)
+        const prepFiltered = prepFilter === 'prepared'
+          ? detail.products.filter((p) => p.prep_status === 'prepared')
+          : prepFilter === 'unprepared'
+          ? detail.products.filter((p) => p.prep_status !== 'prepared')
           : detail.products;
+        const filtered = selectedBrand
+          ? prepFiltered.filter((p) => (p.brand_name ?? '—') === selectedBrand)
+          : prepFiltered;
         const sorted = [...filtered].sort((a, b) =>
           (a.name ?? '').localeCompare(b.name ?? '', 'mn')
         );
@@ -1386,6 +1420,61 @@ const styles = StyleSheet.create({
   },
 
   // ── Brand filter ──
+  prepFilterTabs: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  prepFilterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 5,
+  },
+  prepFilterTabActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  prepFilterTabText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#6B7280',
+  },
+  prepFilterTabTextActive: {
+    color: '#111827',
+  },
+  prepFilterBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  prepFilterBadgeActive: {
+    backgroundColor: '#2563EB',
+  },
+  prepFilterBadgeText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Bold',
+    color: '#6B7280',
+  },
+  prepFilterBadgeTextActive: {
+    color: '#fff',
+  },
   brandFilterScroll: {
     marginBottom: 8,
   },
