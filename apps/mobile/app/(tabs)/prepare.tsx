@@ -424,7 +424,7 @@ function BatchDetailView({
           (a.name ?? '').localeCompare(b.name ?? '', 'mn')
         );
         for (const p of sorted) {
-          const brand = p.bridge_name ?? '—';
+          const brand = p.brand_name ?? '—';
           if (!grouped.has(brand)) grouped.set(brand, []);
           grouped.get(brand)!.push(p);
         }

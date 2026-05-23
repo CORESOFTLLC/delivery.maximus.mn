@@ -1317,6 +1317,7 @@ export interface BatchProduct {
   bridge_name: string | null;
   barcode: string | null;
   product_code: string | null;
+  brand_name: string | null;
 }
 
 export interface BatchEmployee {
