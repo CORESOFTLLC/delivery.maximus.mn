@@ -232,6 +232,7 @@ function BatchDetailView({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -418,9 +419,17 @@ function BatchDetailView({
       <Text style={styles.sectionTitle}>Бараануудын жагсаалт ({detail.products.length})</Text>
 
       {(() => {
+        // Compute unique brands sorted alphabetically
+        const allBrands = [...new Set(
+          detail.products.map((p) => p.brand_name ?? '—')
+        )].sort((a, b) => a.localeCompare(b, 'mn'));
+
         // Group by brand, sort groups and products alphabetically
         const grouped = new Map<string, typeof detail.products>();
-        const sorted = [...detail.products].sort((a, b) =>
+        const filtered = selectedBrand
+          ? detail.products.filter((p) => (p.brand_name ?? '—') === selectedBrand)
+          : detail.products;
+        const sorted = [...filtered].sort((a, b) =>
           (a.name ?? '').localeCompare(b.name ?? '', 'mn')
         );
         for (const p of sorted) {
@@ -430,17 +439,52 @@ function BatchDetailView({
         }
         const brandsSorted = [...grouped.keys()].sort((a, b) => a.localeCompare(b, 'mn'));
         let globalIdx = 0;
-        return brandsSorted.map((brand) => (
-          <View key={brand}>
-            <View style={styles.brandHeader}>
-              <Text style={styles.brandHeaderText}>{brand}</Text>
-              <Text style={styles.brandHeaderCount}>{grouped.get(brand)!.length} нэр</Text>
-            </View>
-            {grouped.get(brand)!.map((product) => (
-              <ProductRow key={product.product_uuid} product={product} index={globalIdx++} />
+
+        return (
+          <>
+            {/* Brand filter chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.brandFilterRow}
+              style={styles.brandFilterScroll}
+            >
+              <TouchableOpacity
+                style={[styles.brandChip, selectedBrand === null && styles.brandChipActive]}
+                onPress={() => setSelectedBrand(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.brandChipText, selectedBrand === null && styles.brandChipTextActive]}>
+                  Бүгд
+                </Text>
+              </TouchableOpacity>
+              {allBrands.map((brand) => (
+                <TouchableOpacity
+                  key={brand}
+                  style={[styles.brandChip, selectedBrand === brand && styles.brandChipActive]}
+                  onPress={() => setSelectedBrand(selectedBrand === brand ? null : brand)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.brandChipText, selectedBrand === brand && styles.brandChipTextActive]}>
+                    {brand}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {brandsSorted.map((brand) => (
+              <View key={brand}>
+                <View style={styles.brandHeader}>
+                  <Text style={styles.brandHeaderText}>{brand}</Text>
+                  <Text style={styles.brandHeaderCount}>{grouped.get(brand)!.length} нэр</Text>
+                </View>
+                {grouped.get(brand)!.map((product) => (
+                  <ProductRow key={product.product_uuid} product={product} index={globalIdx++} />
+                ))}
+              </View>
             ))}
-          </View>
-        ));
+          </>
+        );
       })()}
     </ScrollView>
   );
@@ -1018,6 +1062,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
+  },
+
+  // ── Brand filter ──
+  brandFilterScroll: {
+    marginBottom: 8,
+  },
+  brandFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  brandChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#fff',
+  },
+  brandChipActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#2563EB',
+  },
+  brandChipText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#6B7280',
+  },
+  brandChipTextActive: {
+    color: '#fff',
   },
   productRow: {
     flexDirection: 'row',
