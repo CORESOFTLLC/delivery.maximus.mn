@@ -502,7 +502,7 @@ function ProductRow({ product, index }: { product: BatchProduct; index: number }
     <View style={[styles.productRow, index % 2 === 0 && styles.productRowEven]}>
       {/* Left: image + name */}
       <View style={styles.productLeft}>
-        <View style={[styles.productImageWrap, { borderColor: prepColor }]}>
+        <View style={styles.productImageWrap}>
           {product.image_url ? (
             <Image
               source={{ uri: product.image_url }}
@@ -997,7 +997,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 8,
-    borderWidth: 2,
+    borderWidth: 0.5,
+    borderColor: '#E5E7EB',
     overflow: 'hidden',
     flexShrink: 0,
   },
