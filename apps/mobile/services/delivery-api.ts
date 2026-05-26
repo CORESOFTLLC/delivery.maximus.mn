@@ -102,6 +102,9 @@ export interface Customer {
   name: string;
   code?: string | null;
   phone: string | null;
+  registry_number?: string | null;
+  head_company_name?: string | null;
+  head_company_register?: string | null;
   address: string | null;
   business_region: string | null;
   latitude: number | null;
@@ -141,6 +144,8 @@ export interface DeliveryOrder {
   delivery_started_at: string | null;
   delivery_duration_minutes: number | null;
   registry_number?: string;
+  warehouse_checker?: CheckerEmployee | null;
+  driver_checker?: CheckerEmployee | null;
   payment_check?: boolean;
   total_discount_point?: boolean;
   total_discount_point_amount?: string;
@@ -565,6 +570,8 @@ export interface ProductOrderDetail {
   warehouse_checked: boolean;
   warehouse_checked_quantity: number;
   warehouse_checked_by?: number | null;
+  warehouse_issue_reason?: 'serial_mismatch' | 'short_prepared' | null;
+  warehouse_issue_note?: string | null;
   driver_checked: boolean;
   driver_checked_quantity: number;
   driver_checked_by?: number | null;
@@ -595,6 +602,8 @@ export interface AggregatedProduct {
   is_driver_fully_checked: boolean;
   warehouse_checker?: CheckerEmployee | null;
   driver_checker?: CheckerEmployee | null;
+  warehouse_issue_reason?: 'serial_mismatch' | 'short_prepared' | null;
+  warehouse_issue_note?: string | null;
   orders_count: number;
   order_details: ProductOrderDetail[];
 }
@@ -1002,6 +1011,23 @@ export async function bulkToggleCheck(data: {
   checked: boolean;
 }): Promise<{ success: boolean; data?: { updated_count: number }; message?: string }> {
   return apiRequest('/warehouse/bulk-check', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * POST /warehouse/save-issue
+ *
+ * Нярав бараа бүр дээр шалтгаан + тайлбар хадгалах
+ */
+export async function saveProductIssue(data: {
+  order_uuid: string;
+  product_id: number;
+  issue_reason?: 'serial_mismatch' | 'short_prepared' | null;
+  issue_note?: string;
+}): Promise<{ success: boolean; data?: { product_id: number; issue_reason?: string | null; issue_note?: string | null }; message?: string }> {
+  return apiRequest('/warehouse/save-issue', {
     method: 'POST',
     body: JSON.stringify(data),
   });

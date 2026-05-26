@@ -316,6 +316,7 @@ export default function PackageOrdersScreen() {
   const renderOrderItem = ({ item, index }: { item: DeliveryOrder; index: number }) => {
     // Check if both warehouse and driver have fully checked
     const isBothFullyChecked = item.check_summary?.is_warehouse_fully_checked && item.check_summary?.is_driver_fully_checked;
+    const headCustomerName = item.customer.head_company_name || '-';
     
     return (
       <TouchableOpacity
@@ -361,6 +362,10 @@ export default function PackageOrdersScreen() {
 
           <View style={styles.orderMetaGrid}>
             <View style={styles.orderMetaItem}>
+              <Text style={styles.orderMetaLabel}>Захиалгын огноо</Text>
+              <Text style={styles.orderMetaValue}>{item.date || '-'}</Text>
+            </View>
+            <View style={styles.orderMetaItem}>
               <Text style={styles.orderMetaLabel}>Падааны дүн</Text>
               <Text style={styles.orderMetaValue}>{item.total_amount_formatted || `${item.total_amount}₮`}</Text>
             </View>
@@ -370,7 +375,11 @@ export default function PackageOrdersScreen() {
             </View>
             <View style={styles.orderMetaItem}>
               <Text style={styles.orderMetaLabel}>Регистр</Text>
-              <Text style={styles.orderMetaValue}>{item.registry_number || '-'}</Text>
+              <Text style={styles.orderMetaValue}>{item.customer.registry_number || item.registry_number || '-'}</Text>
+            </View>
+            <View style={styles.orderMetaItem}>
+              <Text style={styles.orderMetaLabel}>Толгой харилцагч</Text>
+              <Text style={styles.orderMetaValue} numberOfLines={1}>{headCustomerName}</Text>
             </View>
           </View>
 

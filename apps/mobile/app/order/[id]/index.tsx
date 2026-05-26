@@ -265,31 +265,31 @@ export default function OrderDetailScreen() {
   // Тулгалт харуулах эсэх - зөвхөн warehouse статусуудад
   const showCheckingUI = order ? WAREHOUSE_STATUSES_ARRAY.includes(order.delivery_status) : false;
 
-  const renderWarehouseCheckerInfo = (product: OrderProduct, compact: boolean = false) => {
-    if (!showCheckingUI || !product.warehouse_checked || !product.warehouse_checker) {
-      return null;
-    }
-
-    const checkerName = (product.warehouse_checker.name || 'Нярав').trim();
-    const checkerInitial = checkerName.charAt(0).toUpperCase() || 'Н';
+  const renderCheckerIdentity = (
+    roleLabel: string,
+    checker: DeliveryOrder['warehouse_checker'] | DeliveryOrder['driver_checker'],
+    fallbackInitial: string
+  ) => {
+    const checkerName = (checker?.name || '-').trim() || '-';
+    const checkerInitial = checkerName !== '-' ? checkerName.charAt(0).toUpperCase() : fallbackInitial;
 
     return (
-      <View style={[styles.checkerInfoRow, compact && styles.checkerInfoRowCompact]}>
-        <View style={styles.checkerAvatarWrap}>
-          {product.warehouse_checker.avatar ? (
+      <View style={styles.sectionCheckerItem}>
+        <View style={styles.sectionCheckerAvatarWrap}>
+          {checker?.avatar ? (
             <Image
-              source={{ uri: transformImageUrl(product.warehouse_checker.avatar) || product.warehouse_checker.avatar }}
-              style={styles.checkerAvatarImage}
+              source={{ uri: transformImageUrl(checker.avatar) || checker.avatar }}
+              style={styles.sectionCheckerAvatarImage}
               resizeMode="cover"
             />
           ) : (
-            <Text style={styles.checkerAvatarText}>{checkerInitial}</Text>
+            <Text style={styles.sectionCheckerAvatarText}>{checkerInitial}</Text>
           )}
         </View>
-        <View style={styles.checkerMetaWrap}>
-          <Text style={styles.checkerMetaTitle} numberOfLines={1}>Нярав: {checkerName}</Text>
-          <Text style={styles.checkerMetaSubtitle} numberOfLines={1}>
-            {product.warehouse_checker.job_position || 'Ажилтан'}
+        <View style={styles.sectionCheckerMetaWrap}>
+          <Text style={styles.sectionCheckerMetaTitle} numberOfLines={1}>{roleLabel}: {checkerName}</Text>
+          <Text style={styles.sectionCheckerMetaSubtitle} numberOfLines={1}>
+            {checker?.job_position || 'Ажилтан'}
           </Text>
         </View>
       </View>
@@ -392,7 +392,8 @@ export default function OrderDetailScreen() {
             </View>
             <VStack style={{ flex: 1 }}>
               <Text style={styles.companyName}>{order.customer.name}</Text>
-              <Text style={styles.registryNumber}>Регистр: {order.registry_number || '-'}</Text>
+              <Text style={styles.registryNumber}>Регистр: {order.customer.registry_number || order.registry_number || '-'}</Text>
+              <Text style={styles.registryNumber}>Толгой харилцагч: {order.customer.head_company_name || '-'}</Text>
             </VStack>
           </HStack>
           
@@ -490,6 +491,11 @@ export default function OrderDetailScreen() {
               ]}>Түгээгч</Text>
               {checkerType === 'driver' && <CheckCircle2 size={16} color="#FFFFFF" />}
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.sectionCheckerWrap}>
+            {renderCheckerIdentity('Нярав', order.warehouse_checker, 'Н')}
+            {renderCheckerIdentity('Түгээгч', order.driver_checker, 'Т')}
           </View>
           
           {/* Check Progress Summary */}
@@ -629,8 +635,6 @@ export default function OrderDetailScreen() {
                           </View>
                           )}
 
-                          {renderWarehouseCheckerInfo(product, true)}
-                          
                           {/* Qty, Price, Total */}
                           <View style={styles.productPriceRow}>
                             <View style={styles.productPriceLeft}>
@@ -747,8 +751,6 @@ export default function OrderDetailScreen() {
                         </View>
                       </View>
                       )}
-
-                      {renderWarehouseCheckerInfo(product)}
                     </View>
                   );
                 })}
@@ -1424,11 +1426,16 @@ const styles = StyleSheet.create({
   checkStatusChecked: {
     color: '#e17100',
   },
-  checkerInfoRow: {
+  sectionCheckerWrap: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 8,
+  },
+  sectionCheckerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginLeft: 20,
     gap: 6,
     backgroundColor: '#EFF6FF',
     borderRadius: 6,
@@ -1437,11 +1444,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
-  checkerInfoRowCompact: {
-    marginLeft: 0,
-    marginTop: 6,
-  },
-  checkerAvatarWrap: {
+  sectionCheckerAvatarWrap: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -1450,24 +1453,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkerAvatarImage: {
+  sectionCheckerAvatarImage: {
     width: '100%',
     height: '100%',
   },
-  checkerAvatarText: {
+  sectionCheckerAvatarText: {
     fontSize: 10,
     fontFamily: 'GIP-Bold',
     color: '#1E40AF',
   },
-  checkerMetaWrap: {
+  sectionCheckerMetaWrap: {
     flex: 1,
   },
-  checkerMetaTitle: {
+  sectionCheckerMetaTitle: {
     fontSize: 10,
     fontFamily: 'GIP-SemiBold',
     color: '#1E3A8A',
   },
-  checkerMetaSubtitle: {
+  sectionCheckerMetaSubtitle: {
     fontSize: 9,
     fontFamily: 'GIP-Regular',
     color: '#374151',

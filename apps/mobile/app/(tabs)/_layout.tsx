@@ -159,9 +159,13 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
 export default function TabsLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { employeeDetail } = useAuthStore();
+  const { employeeDetail, worker, erpRoutes } = useAuthStore();
   // Агуулахын ажилтан бол (хаалганы ажилтан / нярав) Бэлдэх таб харуулна
-  const isWarehouseWorker = (employeeDetail?.warehouses?.length ?? 0) > 0;
+  // employee_detail.warehouses хоосон ирэх кейс дээр fallback нөхцөлүүдийг ашиглана.
+  const hasEmployeeWarehouses = (employeeDetail?.warehouses?.length ?? 0) > 0;
+  const hasErpWarehouses = (erpRoutes ?? []).some((route) => (route.warehouses?.length ?? 0) > 0);
+  const isWarehouseDept = worker?.department?.id === 3 || (worker?.department?.name ?? '').includes('Агуулах');
+  const isWarehouseWorker = hasEmployeeWarehouses || hasErpWarehouses || isWarehouseDept;
 
   return (
     <>

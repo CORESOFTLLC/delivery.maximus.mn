@@ -20,6 +20,7 @@ import {
   Modal,
   Pressable,
   Image,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { 
@@ -42,7 +43,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
-import { getPackageProducts, toggleProductCheck, AggregatedProduct, PackageProductsData } from '../../../services/delivery-api';
+import {
+  getPackageProducts,
+  getPackageOrders,
+  toggleProductCheck,
+  saveProductIssue,
+  AggregatedProduct,
+  PackageProductsData,
+  DeliveryOrder,
+  CheckerEmployee,
+} from '../../../services/delivery-api';
 
 // Polling interval for realtime updates (3 seconds - balanced between sync and performance)
 const POLLING_INTERVAL = 3000;
@@ -70,6 +80,13 @@ interface BrandSection {
   isExpanded: boolean;
 }
 
+type WarehouseIssueReason = 'serial_mismatch' | 'short_prepared';
+
+const ISSUE_REASON_OPTIONS: { value: WarehouseIssueReason; label: string }[] = [
+  { value: 'serial_mismatch', label: 'Сери зөрж, буруу бэлтгэгдсэн' },
+  { value: 'short_prepared', label: 'Бараа дутуу бэлтгэгдсэн' },
+];
+
 export default function PackageBoxCheckingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { worker } = useAuthStore();
@@ -83,6 +100,18 @@ export default function PackageBoxCheckingScreen() {
   const [checkingProducts, setCheckingProducts] = useState<Set<string>>(new Set()); // Products being checked
   const [isCheckingAny, setIsCheckingAny] = useState(false); // Prevent concurrent check actions
   const [lastCheckTime, setLastCheckTime] = useState(0); // Track last check action time
+  const [issueModalVisible, setIssueModalVisible] = useState(false);
+  const [selectedIssueProduct, setSelectedIssueProduct] = useState<AggregatedProduct | null>(null);
+  const [issueReason, setIssueReason] = useState<WarehouseIssueReason | null>(null);
+  const [issueNote, setIssueNote] = useState('');
+  const [savingIssue, setSavingIssue] = useState(false);
+  const [headerCheckers, setHeaderCheckers] = useState<{
+    warehouseChecker: CheckerEmployee | null;
+    driverChecker: CheckerEmployee | null;
+  }>({
+    warehouseChecker: null,
+    driverChecker: null,
+  });
 
   // Department id=3 бол warehouse (нярав), бусад бол driver (түгээгч)
   const [checkerType, setCheckerType] = useState<'warehouse' | 'driver'>('driver');
@@ -100,16 +129,32 @@ export default function PackageBoxCheckingScreen() {
     if (!id) return;
     
     try {
-      const result = await getPackageProducts({
-        packageId: parseInt(id),
-        workerId: worker?.id,
-        status: WAREHOUSE_STATUSES,
-      });
-      
-      if (result.success && result.data) {
-        setData(result.data);
+      const [productsResult, ordersResult] = await Promise.all([
+        getPackageProducts({
+          packageId: parseInt(id),
+          workerId: worker?.id,
+          status: WAREHOUSE_STATUSES,
+        }),
+        getPackageOrders({
+          packageId: parseInt(id),
+          workerId: worker?.id,
+          status: WAREHOUSE_STATUSES,
+        }),
+      ]);
+
+      if (productsResult.success && productsResult.data) {
+        setData(productsResult.data);
       } else {
-        Alert.alert('Алдаа', result.message || 'Бараа татахад алдаа гарлаа');
+        Alert.alert('Алдаа', productsResult.message || 'Бараа татахад алдаа гарлаа');
+      }
+
+      if (ordersResult.success && ordersResult.data?.orders) {
+        const firstWarehouseChecker = ordersResult.data.orders.find((order: DeliveryOrder) => order.warehouse_checker)?.warehouse_checker || null;
+        const firstDriverChecker = ordersResult.data.orders.find((order: DeliveryOrder) => order.driver_checker)?.driver_checker || null;
+        setHeaderCheckers({
+          warehouseChecker: firstWarehouseChecker,
+          driverChecker: firstDriverChecker,
+        });
       }
     } catch (error) {
       Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
@@ -353,6 +398,80 @@ export default function PackageBoxCheckingScreen() {
     return `${product.product_uuid}_${product.serial_number || 'no_serial'}_${lineKey}`;
   };
 
+  const isWarehouseUser = worker?.department?.id === 3;
+
+  const sectionCheckers = useMemo(() => {
+    return {
+      warehouseChecker: headerCheckers.warehouseChecker,
+      driverChecker: headerCheckers.driverChecker,
+    };
+  }, [headerCheckers]);
+
+  const getIssueLabel = (reason?: string | null) => {
+    const found = ISSUE_REASON_OPTIONS.find((option) => option.value === reason);
+    return found?.label || null;
+  };
+
+  const openIssueModal = (product: AggregatedProduct) => {
+    if (!isWarehouseUser) return;
+
+    setSelectedIssueProduct(product);
+    setIssueReason((product.warehouse_issue_reason as WarehouseIssueReason | null) || null);
+    setIssueNote(product.warehouse_issue_note || '');
+    setIssueModalVisible(true);
+  };
+
+  const closeIssueModal = () => {
+    if (savingIssue) return;
+    setIssueModalVisible(false);
+    setSelectedIssueProduct(null);
+    setIssueReason(null);
+    setIssueNote('');
+  };
+
+  const handleSaveIssue = async () => {
+    if (!selectedIssueProduct || !isWarehouseUser) return;
+
+    if (!issueReason && issueNote.trim().length === 0) {
+      Alert.alert('Анхааруулга', 'Шалтгаан сонгох эсвэл тайлбар оруулна уу');
+      return;
+    }
+
+    setSavingIssue(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedIssueProduct.order_details.map((detail) =>
+          saveProductIssue({
+            order_uuid: detail.erp_order_uuid,
+            product_id: detail.product_line_id,
+            issue_reason: issueReason,
+            issue_note: issueNote.trim() || undefined,
+          })
+        )
+      );
+
+      const failed = results.filter(
+        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+      );
+
+      if (failed.length > 0) {
+        Alert.alert('Алдаа', 'Асуудлын мэдээлэл хадгалах үед алдаа гарлаа');
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIssueModalVisible(false);
+      setSelectedIssueProduct(null);
+      setIssueReason(null);
+      setIssueNote('');
+      await fetchProducts();
+    } catch (error) {
+      Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
+    } finally {
+      setSavingIssue(false);
+    }
+  };
+
   const renderProductItem = ({ item, index }: { item: AggregatedProduct; index: number }) => {
     const productKey = getProductKey(item);
     const isChecking = checkingProducts.has(productKey);
@@ -469,30 +588,28 @@ export default function PackageBoxCheckingScreen() {
               )}
             </View>
 
-            {item.warehouse_checked_quantity > 0 && item.warehouse_checker && (
-              <View style={styles.checkerInfoRow}>
-                <View style={styles.checkerAvatarWrap}>
-                  {item.warehouse_checker.avatar ? (
-                    <Image
-                      source={{ uri: item.warehouse_checker.avatar }}
-                      style={styles.checkerAvatarImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <Text style={styles.checkerAvatarText}>
-                      {(item.warehouse_checker.name || 'Нярав').trim().charAt(0).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.checkerMetaWrap}>
-                  <Text style={styles.checkerMetaTitle} numberOfLines={1}>
-                    Нярав: {item.warehouse_checker.name}
-                  </Text>
-                  <Text style={styles.checkerMetaSubtitle} numberOfLines={1}>
-                    {item.warehouse_checker.job_position || 'Ажилтан'}
-                  </Text>
-                </View>
+            {(item.warehouse_issue_reason || item.warehouse_issue_note) && (
+              <View style={styles.issueInfoBox}>
+                <Text style={styles.issueInfoTitle}>Асуудал:</Text>
+                {item.warehouse_issue_reason && (
+                  <Text style={styles.issueInfoReason}>{getIssueLabel(item.warehouse_issue_reason)}</Text>
+                )}
+                {item.warehouse_issue_note && (
+                  <Text style={styles.issueInfoNote}>{item.warehouse_issue_note}</Text>
+                )}
               </View>
+            )}
+
+            {isWarehouseUser && (
+              <TouchableOpacity
+                style={styles.issueActionButton}
+                onPress={() => openIssueModal(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.issueActionButtonText}>
+                  {item.warehouse_issue_reason || item.warehouse_issue_note ? 'Асуудал засах' : 'Асуудал нэмэх'}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
           
@@ -575,6 +692,37 @@ export default function PackageBoxCheckingScreen() {
         <Text style={styles.sectionHeaderText}>{section.title}</Text>
         <View style={styles.sectionCountBadge}>
           <Text style={styles.sectionCountText}>{section.data.length}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderHeaderCheckerIdentity = (
+    roleLabel: string,
+    checker: AggregatedProduct['warehouse_checker'] | AggregatedProduct['driver_checker'],
+    fallbackInitial: string
+  ) => {
+    const checkerName = (checker?.name || '-').trim() || '-';
+    const checkerInitial = checkerName !== '-' ? checkerName.charAt(0).toUpperCase() : fallbackInitial;
+
+    return (
+      <View style={styles.checkerInfoRow}>
+        <View style={styles.checkerAvatarWrap}>
+          {checker?.avatar ? (
+            <Image
+              source={{ uri: checker.avatar }}
+              style={styles.checkerAvatarImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.checkerAvatarText}>{checkerInitial}</Text>
+          )}
+        </View>
+        <View style={styles.checkerMetaWrap}>
+          <Text style={styles.checkerMetaTitle} numberOfLines={1}>{roleLabel}: {checkerName}</Text>
+          <Text style={styles.checkerMetaSubtitle} numberOfLines={1}>
+            {checker?.job_position || 'Ажилтан'}
+          </Text>
         </View>
       </View>
     );
@@ -793,6 +941,12 @@ export default function PackageBoxCheckingScreen() {
                 </View>
               )}
 
+              <View style={styles.sortCheckerSection}>
+                <Text style={styles.sortCheckerSectionTitle}>Тулгасан ажилтан</Text>
+                {renderHeaderCheckerIdentity('Нярав', sectionCheckers.warehouseChecker, 'Н')}
+                {renderHeaderCheckerIdentity('Түгээгч', sectionCheckers.driverChecker, 'Т')}
+              </View>
+
               {/* Sort Selector */}
               {renderSortSelector()}
             </>
@@ -812,6 +966,78 @@ export default function PackageBoxCheckingScreen() {
             </View>
           }
         />
+
+        <Modal
+          visible={issueModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeIssueModal}
+        >
+          <Pressable style={styles.issueModalOverlay} onPress={closeIssueModal}>
+            <Pressable style={styles.issueModalCard} onPress={() => {}}>
+              <Text style={styles.issueModalTitle}>Барааны асуудал тэмдэглэх</Text>
+              {selectedIssueProduct && (
+                <Text style={styles.issueModalProductName} numberOfLines={2}>{selectedIssueProduct.name}</Text>
+              )}
+
+              <Text style={styles.issueModalLabel}>Шалтгаан</Text>
+              <View style={styles.issueReasonList}>
+                {ISSUE_REASON_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.issueReasonItem,
+                      issueReason === option.value && styles.issueReasonItemActive,
+                    ]}
+                    onPress={() => setIssueReason(option.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.issueReasonItemText,
+                        issueReason === option.value && styles.issueReasonItemTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.issueModalLabel}>Нэмэлт тайлбар</Text>
+              <TextInput
+                value={issueNote}
+                onChangeText={setIssueNote}
+                placeholder="Тайлбар бичнэ үү"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={4}
+                style={styles.issueNoteInput}
+              />
+
+              <View style={styles.issueModalActions}>
+                <TouchableOpacity
+                  style={styles.issueCancelButton}
+                  onPress={closeIssueModal}
+                  disabled={savingIssue}
+                >
+                  <Text style={styles.issueCancelButtonText}>Цуцлах</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.issueSaveButton}
+                  onPress={handleSaveIssue}
+                  disabled={savingIssue}
+                >
+                  {savingIssue ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.issueSaveButtonText}>Хадгалах</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </>
   );
@@ -961,6 +1187,22 @@ const styles = StyleSheet.create({
   },
   progressFillDriver: {
     backgroundColor: '#2563EB',
+  },
+  sortCheckerSection: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 6,
+  },
+  sortCheckerSectionTitle: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#6B7280',
+    marginBottom: 2,
   },
   // Sort selector styles
   sortContainer: {
@@ -1421,6 +1663,146 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Regular',
     color: '#374151',
     marginTop: 1,
+  },
+  issueInfoBox: {
+    marginTop: 6,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  issueInfoTitle: {
+    fontSize: 9,
+    fontFamily: 'GIP-Bold',
+    color: '#9A3412',
+  },
+  issueInfoReason: {
+    marginTop: 2,
+    fontSize: 10,
+    fontFamily: 'GIP-SemiBold',
+    color: '#C2410C',
+  },
+  issueInfoNote: {
+    marginTop: 2,
+    fontSize: 10,
+    fontFamily: 'GIP-Regular',
+    color: '#7C2D12',
+  },
+  issueActionButton: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  issueActionButtonText: {
+    fontSize: 10,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1D4ED8',
+  },
+  issueModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  issueModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+  },
+  issueModalTitle: {
+    fontSize: 16,
+    fontFamily: 'GIP-Bold',
+    color: '#111827',
+  },
+  issueModalProductName: {
+    marginTop: 6,
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#374151',
+  },
+  issueModalLabel: {
+    marginTop: 12,
+    marginBottom: 6,
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#4B5563',
+  },
+  issueReasonList: {
+    gap: 8,
+  },
+  issueReasonItem: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: '#F9FAFB',
+  },
+  issueReasonItemActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  issueReasonItemText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#374151',
+  },
+  issueReasonItemTextActive: {
+    color: '#1D4ED8',
+    fontFamily: 'GIP-SemiBold',
+  },
+  issueNoteInput: {
+    minHeight: 88,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    fontFamily: 'GIP-Regular',
+    color: '#111827',
+    textAlignVertical: 'top',
+  },
+  issueModalActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  issueCancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingVertical: 10,
+  },
+  issueCancelButtonText: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
+  },
+  issueSaveButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#2563EB',
+    paddingVertical: 10,
+  },
+  issueSaveButtonText: {
+    fontSize: 12,
+    fontFamily: 'GIP-Bold',
+    color: '#FFFFFF',
   },
   // Product check button (larger, on product row)
   productCheckButton: {
