@@ -90,21 +90,10 @@ export default function ProfileScreen() {
   }, [fetchData]);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Системээс гарах',
-      'Та системээс гарахдаа итгэлтэй байна уу?',
-      [
-        { text: 'Болих', style: 'cancel' },
-        {
-          text: 'Гарах',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            router.replace('/login');
-          },
-        },
-      ]
-    );
+    void (async () => {
+      await logout();
+      router.replace('/login');
+    })();
   };
 
   const handleDeleteAccount = () => {

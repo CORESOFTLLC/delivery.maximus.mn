@@ -48,7 +48,7 @@ import {
   Store,
 } from 'lucide-react-native';
 import { Box, VStack, HStack, Text, Heading } from '../../../components/ui';
-import { getOrderDetail, getPackageOrders, DeliveryOrder, OrderProduct, OrderSummary, toggleProductCheck, transformImageUrl } from '../../../services/delivery-api';
+import { getOrderDetail, getOrderProducts, getPackageOrders, DeliveryOrder, OrderProduct, OrderSummary, toggleProductCheck, transformImageUrl } from '../../../services/delivery-api';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 
 // Warehouse related statuses for navigation
@@ -127,8 +127,24 @@ export default function OrderDetailScreen() {
       
       if (result.success && result.data) {
         setOrder(result.data.order);
-        setProducts(result.data.products || []);
-        setSummary(result.data.summary || null);
+
+        // Support multiple backend response shapes and fallback endpoint.
+        const primaryProducts = (result.data as any).products || (result.data as any).order?.products || [];
+
+        if (primaryProducts.length > 0) {
+          setProducts(primaryProducts);
+          setSummary(result.data.summary || null);
+        } else {
+          const productsResult = await getOrderProducts(id);
+          if (productsResult.success && productsResult.data) {
+            setProducts(productsResult.data.products || []);
+            setSummary(productsResult.data.summary || result.data.summary || null);
+          } else {
+            setProducts([]);
+            setSummary(result.data.summary || null);
+          }
+        }
+
         setError(null);
       } else {
         setError(result.message || 'Захиалга олдсонгүй');
@@ -248,6 +264,37 @@ export default function OrderDetailScreen() {
 
   // Тулгалт харуулах эсэх - зөвхөн warehouse статусуудад
   const showCheckingUI = order ? WAREHOUSE_STATUSES_ARRAY.includes(order.delivery_status) : false;
+
+  const renderWarehouseCheckerInfo = (product: OrderProduct, compact: boolean = false) => {
+    if (!showCheckingUI || !product.warehouse_checked || !product.warehouse_checker) {
+      return null;
+    }
+
+    const checkerName = (product.warehouse_checker.name || 'Нярав').trim();
+    const checkerInitial = checkerName.charAt(0).toUpperCase() || 'Н';
+
+    return (
+      <View style={[styles.checkerInfoRow, compact && styles.checkerInfoRowCompact]}>
+        <View style={styles.checkerAvatarWrap}>
+          {product.warehouse_checker.avatar ? (
+            <Image
+              source={{ uri: transformImageUrl(product.warehouse_checker.avatar) || product.warehouse_checker.avatar }}
+              style={styles.checkerAvatarImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.checkerAvatarText}>{checkerInitial}</Text>
+          )}
+        </View>
+        <View style={styles.checkerMetaWrap}>
+          <Text style={styles.checkerMetaTitle} numberOfLines={1}>Нярав: {checkerName}</Text>
+          <Text style={styles.checkerMetaSubtitle} numberOfLines={1}>
+            {product.warehouse_checker.job_position || 'Ажилтан'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -546,7 +593,7 @@ export default function OrderDetailScreen() {
                             <Image
                               source={{ uri: transformImageUrl(product.image_url) || '' }}
                               style={styles.productImage}
-                              resizeMode="cover"
+                              resizeMode="contain"
                               onError={() => setFailedImages(prev => new Set(prev).add(product.product_uuid))}
                             />
                           ) : (
@@ -581,6 +628,8 @@ export default function OrderDetailScreen() {
                             </View>
                           </View>
                           )}
+
+                          {renderWarehouseCheckerInfo(product, true)}
                           
                           {/* Qty, Price, Total */}
                           <View style={styles.productPriceRow}>
@@ -698,6 +747,8 @@ export default function OrderDetailScreen() {
                         </View>
                       </View>
                       )}
+
+                      {renderWarehouseCheckerInfo(product)}
                     </View>
                   );
                 })}
@@ -1091,10 +1142,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
     marginRight: 10,
+    padding: 4,
   },
   productImage: {
-    width: 48,
-    height: 48,
+    width: '100%',
+    height: '100%',
     borderRadius: 6,
   },
   productImagePlaceholder: {
@@ -1371,6 +1423,55 @@ const styles = StyleSheet.create({
   },
   checkStatusChecked: {
     color: '#e17100',
+  },
+  checkerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginLeft: 20,
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  checkerInfoRowCompact: {
+    marginLeft: 0,
+    marginTop: 6,
+  },
+  checkerAvatarWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    overflow: 'hidden',
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  checkerAvatarText: {
+    fontSize: 10,
+    fontFamily: 'GIP-Bold',
+    color: '#1E40AF',
+  },
+  checkerMetaWrap: {
+    flex: 1,
+  },
+  checkerMetaTitle: {
+    fontSize: 10,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1E3A8A',
+  },
+  checkerMetaSubtitle: {
+    fontSize: 9,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+    marginTop: 1,
   },
   // Checker Selector Styles
   checkerSelectorCard: {

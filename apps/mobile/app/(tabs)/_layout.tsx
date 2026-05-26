@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet, Image, Platform, Text as RNText, ScrollView, Alert } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Image, Platform, Text as RNText, ScrollView } from 'react-native';
 import { Warehouse, Truck, Menu, X, User, LogOut, ChevronRight, BarChart3, Home, Package } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { version as appVersion } from '../../package.json';
@@ -35,22 +35,11 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Гарах',
-      'Та системээс гарахдаа итгэлтэй байна уу?',
-      [
-        { text: 'Болих', style: 'cancel' },
-        {
-          text: 'Гарах',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            onClose();
-            router.replace('/login');
-          }
-        },
-      ]
-    );
+    void (async () => {
+      await logout();
+      onClose();
+      router.replace('/login');
+    })();
   };
 
   // Get initials from worker name

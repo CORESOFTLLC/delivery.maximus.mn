@@ -51,6 +51,7 @@ import {
 import { useAuthStore } from '../../../stores/delivery-auth-store';
 import {
   getOrderDetail,
+  getOrderProducts,
   getReturnReasons,
   updateProductDelivery,
   bulkDeliverProducts,
@@ -148,14 +149,24 @@ export default function ShopDeliveryScreen() {
       
       if (orderResult.success && orderResult.data) {
         setOrder(orderResult.data.order);
-        setProducts(orderResult.data.products || []);
+        const primaryProducts = (orderResult.data as any).products || (orderResult.data as any).order?.products || [];
+
+        let resolvedProducts: OrderProduct[] = primaryProducts;
+        if (!resolvedProducts || resolvedProducts.length === 0) {
+          const productsResult = await getOrderProducts(id);
+          if (productsResult.success && productsResult.data) {
+            resolvedProducts = productsResult.data.products || [];
+          }
+        }
+
+        setProducts(resolvedProducts || []);
         
         // Record delivery start time
         startDelivery(id).catch(err => console.log('startDelivery error:', err));
         
         // Initialize product states
         const initialStates = new Map<number, ProductDeliveryState>();
-        (orderResult.data.products || []).forEach(p => {
+        (resolvedProducts || []).forEach(p => {
           initialStates.set(p.id, {
             product_id: p.id,
             delivered_quantity: p.delivered_quantity || p.quantity,

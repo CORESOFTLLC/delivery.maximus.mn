@@ -100,6 +100,7 @@ export const transformImageUrl = (url: string | null): string | null => {
 export interface Customer {
   uuid: string | null;
   name: string;
+  code?: string | null;
   phone: string | null;
   address: string | null;
   business_region: string | null;
@@ -175,9 +176,13 @@ export interface OrderProduct {
   warehouse_checked: boolean;
   warehouse_checked_at: string | null;
   warehouse_checked_quantity: number;
+  warehouse_checked_by?: number | null;
+  warehouse_checker?: CheckerEmployee | null;
   driver_checked: boolean;
   driver_checked_at: string | null;
   driver_checked_quantity: number;
+  driver_checked_by?: number | null;
+  driver_checker?: CheckerEmployee | null;
   delivered_quantity: number;
   returned_quantity: number;
   delivery_notes: string | null;
@@ -444,12 +449,20 @@ async function apiRequest<T>(
       headers,
     });
 
-    const data = await response.json();
+    const rawText = await response.text();
+    let data: any = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = {};
+      }
+    }
     
     if (!response.ok) {
       return { 
         success: false, 
-        message: data.message || `HTTP Error: ${response.status}` 
+        message: data.message || (response.status === 401 ? 'Unauthenticated.' : `HTTP Error: ${response.status}`),
       };
     }
 
@@ -551,8 +564,17 @@ export interface ProductOrderDetail {
   product_line_id: number;
   warehouse_checked: boolean;
   warehouse_checked_quantity: number;
+  warehouse_checked_by?: number | null;
   driver_checked: boolean;
   driver_checked_quantity: number;
+  driver_checked_by?: number | null;
+}
+
+export interface CheckerEmployee {
+  id: number;
+  name: string;
+  job_position?: string | null;
+  avatar?: string | null;
 }
 
 export interface AggregatedProduct {
@@ -571,6 +593,8 @@ export interface AggregatedProduct {
   driver_checked_quantity: number;
   is_warehouse_fully_checked: boolean;
   is_driver_fully_checked: boolean;
+  warehouse_checker?: CheckerEmployee | null;
+  driver_checker?: CheckerEmployee | null;
   orders_count: number;
   order_details: ProductOrderDetail[];
 }

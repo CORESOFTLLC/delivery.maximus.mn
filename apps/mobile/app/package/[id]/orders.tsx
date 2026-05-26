@@ -23,6 +23,8 @@ import {
   ChevronRight, 
   Calendar, 
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Circle,
   Eye,
   CheckCircle2,
@@ -35,7 +37,7 @@ import {
 } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { useAuthStore } from '../../../stores/delivery-auth-store';
-import { getPackageOrders, DeliveryOrder, PackageOrdersData, optimizeRoute } from '../../../services/delivery-api';
+import { getPackageOrders, DeliveryOrder, PackageOrdersData, optimizeRoute, updateOrderSortOrder } from '../../../services/delivery-api';
 
 type FilterStatus = 'all' | 'assigned_to_driver' | 'warehouse_checking' | 'warehouse_checked' | 'driver_checking';
 
@@ -48,6 +50,9 @@ export default function PackageOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [optimizing, setOptimizing] = useState(false);
+  const [manualSortMode, setManualSortMode] = useState(false);
+  const [savingManualSort, setSavingManualSort] = useState(false);
+  const [manualOrders, setManualOrders] = useState<DeliveryOrder[]>([]);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Get user's current location
@@ -181,6 +186,66 @@ export default function PackageOrdersScreen() {
       ? (data?.orders.filter((order) => order.delivery_status === 'warehouse_checking' || order.delivery_status === 'warehouse_checked') || [])
       : (data?.orders.filter((order) => order.delivery_status === filterStatus) || []);
 
+  const startManualSort = () => {
+    if (!data?.orders || data.orders.length === 0) {
+      Alert.alert('Анхааруулга', 'Сортлох захиалга байхгүй байна');
+      return;
+    }
+
+    const sorted = [...data.orders]
+      .sort((a, b) => (a.sort_order || 9999) - (b.sort_order || 9999))
+      .map((order, index) => ({ ...order, sort_order: index + 1 }));
+
+    setFilterStatus('all');
+    setManualOrders(sorted);
+    setManualSortMode(true);
+  };
+
+  const cancelManualSort = () => {
+    setManualSortMode(false);
+    setManualOrders([]);
+  };
+
+  const moveManualOrder = (index: number, direction: 'up' | 'down') => {
+    if (!manualSortMode || manualOrders.length === 0) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= manualOrders.length) return;
+
+    const reordered = [...manualOrders];
+    const temp = reordered[index];
+    reordered[index] = reordered[targetIndex];
+    reordered[targetIndex] = temp;
+
+    setManualOrders(reordered.map((order, idx) => ({ ...order, sort_order: idx + 1 })));
+  };
+
+  const saveManualSort = async () => {
+    if (!manualSortMode || manualOrders.length === 0) return;
+
+    setSavingManualSort(true);
+    try {
+      for (let i = 0; i < manualOrders.length; i++) {
+        const order = manualOrders[i];
+        await updateOrderSortOrder({
+          orderUuid: order.uuid,
+          newSortOrder: i + 1,
+        });
+      }
+
+      Alert.alert('Амжилттай', 'Захиалгын дараалал хадгалагдлаа');
+      setManualSortMode(false);
+      setManualOrders([]);
+      fetchOrders();
+    } catch (error) {
+      Alert.alert('Алдаа', 'Дараалал хадгалахад алдаа гарлаа');
+    } finally {
+      setSavingManualSort(false);
+    }
+  };
+
+  const displayedOrders = manualSortMode ? manualOrders : filteredOrders;
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'assigned_to_driver': return '#F59E0B';
@@ -248,7 +313,7 @@ export default function PackageOrdersScreen() {
     Linking.openURL(url);
   };
 
-  const renderOrderItem = ({ item }: { item: DeliveryOrder }) => {
+  const renderOrderItem = ({ item, index }: { item: DeliveryOrder; index: number }) => {
     // Check if both warehouse and driver have fully checked
     const isBothFullyChecked = item.check_summary?.is_warehouse_fully_checked && item.check_summary?.is_driver_fully_checked;
     
@@ -258,12 +323,16 @@ export default function PackageOrdersScreen() {
           styles.orderCard,
           isBothFullyChecked && styles.orderCardCompleted
         ]}
-        onPress={() => router.push(`/order/${item.uuid}?packageId=${id}` as any)}
+        onPress={() => {
+          if (!manualSortMode) {
+            router.push(`/order/${item.uuid}?packageId=${id}` as any);
+          }
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.orderHeader}>
           <View style={[styles.sortOrderBadge, isBothFullyChecked && styles.sortOrderBadgeCompleted]}>
-            <Text style={styles.sortOrderText}>#{item.sort_order || '-'}</Text>
+            <Text style={styles.sortOrderText}>#{manualSortMode ? index + 1 : (item.sort_order || '-')}</Text>
           </View>
           {/* Distance badge */}
           {item.distance_km !== null && (
@@ -289,6 +358,22 @@ export default function PackageOrdersScreen() {
             <Package size={14} color={isBothFullyChecked ? "#e17100" : "#6B7280"} />
             <Text style={[styles.orderCodeSecondary, isBothFullyChecked && styles.textCompleted]}>{item.order_code}</Text>
           </View>
+
+          <View style={styles.orderMetaGrid}>
+            <View style={styles.orderMetaItem}>
+              <Text style={styles.orderMetaLabel}>Падааны дүн</Text>
+              <Text style={styles.orderMetaValue}>{item.total_amount_formatted || `${item.total_amount}₮`}</Text>
+            </View>
+            <View style={styles.orderMetaItem}>
+              <Text style={styles.orderMetaLabel}>Харилцагчийн код</Text>
+              <Text style={styles.orderMetaValue}>{item.customer.code || '-'}</Text>
+            </View>
+            <View style={styles.orderMetaItem}>
+              <Text style={styles.orderMetaLabel}>Регистр</Text>
+              <Text style={styles.orderMetaValue}>{item.registry_number || '-'}</Text>
+            </View>
+          </View>
+
           <Text style={[styles.customerAddress, isBothFullyChecked && styles.textCompleted]} numberOfLines={1}>
             {item.customer.address || 'Хаяг байхгүй'}
         </Text>
@@ -354,6 +439,34 @@ export default function PackageOrdersScreen() {
               <Text style={styles.w3wText}>///{item.customer.what3words}</Text>
             </TouchableOpacity>
           )}
+
+          {manualSortMode && (
+            <View style={styles.manualActionsWrap}>
+              <TouchableOpacity
+                style={[styles.manualMoveButton, index === 0 && styles.manualMoveButtonDisabled]}
+                disabled={index === 0 || savingManualSort}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  moveManualOrder(index, 'up');
+                }}
+              >
+                <ArrowUp size={14} color="#FFFFFF" />
+                <Text style={styles.manualMoveText}>Дээш</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.manualMoveButton, index === displayedOrders.length - 1 && styles.manualMoveButtonDisabled]}
+                disabled={index === displayedOrders.length - 1 || savingManualSort}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  moveManualOrder(index, 'down');
+                }}
+              >
+                <ArrowDown size={14} color="#FFFFFF" />
+                <Text style={styles.manualMoveText}>Доош</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -405,7 +518,7 @@ export default function PackageOrdersScreen() {
       <View style={styles.container}>
         {/* Orders List with Header */}
         <FlatList
-          data={filteredOrders}
+          data={displayedOrders}
           renderItem={renderOrderItem}
           keyExtractor={(item) => item.uuid}
           contentContainerStyle={styles.listContent}
@@ -425,30 +538,65 @@ export default function PackageOrdersScreen() {
                   
                   {/* Route Action Buttons */}
                   <View style={styles.routeButtonsRow}>
-                    {/* Optimize Route Button */}
-                    <TouchableOpacity
-                      style={[styles.optimizeButton, optimizing && styles.optimizeButtonDisabled]}
-                      onPress={handleOptimizeRoute}
-                      disabled={optimizing}
-                    >
-                      {optimizing ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Route size={16} color="#FFFFFF" />
-                      )}
-                      <Text style={styles.optimizeButtonText}>
-                        {optimizing ? 'Оновчилж байна...' : 'Оновчлох'}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    {/* View Full Route on Map Button */}
-                    <TouchableOpacity
-                      style={styles.viewMapButton}
-                      onPress={openFullRouteInMaps}
-                    >
-                      <Map size={16} color="#FFFFFF" />
-                      <Text style={styles.viewMapButtonText}>Зураг дээр</Text>
-                    </TouchableOpacity>
+                    {manualSortMode ? (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.manualCancelButton, savingManualSort && styles.optimizeButtonDisabled]}
+                          onPress={cancelManualSort}
+                          disabled={savingManualSort}
+                        >
+                          <Text style={styles.manualCancelButtonText}>Цуцлах</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.manualSaveButton, savingManualSort && styles.optimizeButtonDisabled]}
+                          onPress={saveManualSort}
+                          disabled={savingManualSort}
+                        >
+                          {savingManualSort ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : null}
+                          <Text style={styles.manualSaveButtonText}>
+                            {savingManualSort ? 'Хадгалж байна...' : 'Хадгалах'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        {/* Optimize Route Button */}
+                        <TouchableOpacity
+                          style={[styles.optimizeButton, optimizing && styles.optimizeButtonDisabled]}
+                          onPress={handleOptimizeRoute}
+                          disabled={optimizing}
+                        >
+                          {optimizing ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <Route size={16} color="#FFFFFF" />
+                          )}
+                          <Text style={styles.optimizeButtonText}>
+                            {optimizing ? 'Оновчилж байна...' : 'Оновчлох'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* View Full Route on Map Button */}
+                        <TouchableOpacity
+                          style={styles.viewMapButton}
+                          onPress={openFullRouteInMaps}
+                        >
+                          <Map size={16} color="#FFFFFF" />
+                          <Text style={styles.viewMapButtonText}>Зураг дээр</Text>
+                        </TouchableOpacity>
+
+                        {/* Manual Sort Button */}
+                        <TouchableOpacity
+                          style={styles.manualSortButton}
+                          onPress={startManualSort}
+                        >
+                          <Text style={styles.manualSortButtonText}>Гараар сортлох</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
               )}
@@ -594,6 +742,49 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewMapButtonText: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#FFFFFF',
+  },
+  manualSortButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0EA5E9',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  manualSortButtonText: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#FFFFFF',
+  },
+  manualCancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6B7280',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  manualCancelButtonText: {
+    fontSize: 13,
+    fontFamily: 'GIP-SemiBold',
+    color: '#FFFFFF',
+  },
+  manualSaveButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16A34A',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  manualSaveButtonText: {
     fontSize: 13,
     fontFamily: 'GIP-SemiBold',
     color: '#FFFFFF',
@@ -764,6 +955,31 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  orderMetaGrid: {
+    marginTop: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    gap: 4,
+  },
+  orderMetaItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  orderMetaLabel: {
+    fontSize: 11,
+    fontFamily: 'GIP-Medium',
+    color: '#6B7280',
+  },
+  orderMetaValue: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1F2937',
+    maxWidth: '58%',
+    textAlign: 'right',
+  },
   // Order check progress styles
   orderCheckProgress: {
     marginTop: 10,
@@ -887,6 +1103,27 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
     marginTop: 6,
+  },
+  manualActionsWrap: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  manualMoveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  manualMoveButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  manualMoveText: {
+    fontSize: 11,
+    fontFamily: 'GIP-SemiBold',
+    color: '#FFFFFF',
   },
   w3wButton: {
     flexDirection: 'row',

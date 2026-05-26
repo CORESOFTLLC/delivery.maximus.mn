@@ -81,6 +81,7 @@ export default function PackageBoxCheckingScreen() {
   const [sortOption, setSortOption] = useState<SortOption>('brand');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [checkingProducts, setCheckingProducts] = useState<Set<string>>(new Set()); // Products being checked
+  const [isCheckingAny, setIsCheckingAny] = useState(false); // Prevent concurrent check actions
   const [lastCheckTime, setLastCheckTime] = useState(0); // Track last check action time
 
   // Department id=3 бол warehouse (нярав), бусад бол driver (түгээгч)
@@ -167,7 +168,7 @@ export default function PackageBoxCheckingScreen() {
     const productKey = getProductKey(item);
     
     // Prevent double clicks
-    if (checkingProducts.has(productKey)) return;
+    if (checkingProducts.has(productKey) || isCheckingAny) return;
     
     // Instant haptic feedback - feels responsive immediately
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -179,6 +180,7 @@ export default function PackageBoxCheckingScreen() {
     const shouldCheck = myCheckedCount < item.total_quantity;
     
     // Optimistic UI update
+    setIsCheckingAny(true);
     setCheckingProducts(prev => new Set(prev).add(productKey));
     
     // Update local state immediately (optimistic) - including summary
@@ -234,31 +236,35 @@ export default function PackageBoxCheckingScreen() {
     // Mark last check time to prevent polling from overwriting optimistic update
     setLastCheckTime(Date.now());
     
-    // Fire-and-forget API calls - polling will sync after delay
-    Promise.allSettled(
-      item.order_details.map(detail => 
-        toggleProductCheck({
-          order_uuid: detail.erp_order_uuid,
-          product_id: detail.product_line_id,
-          checker_type: checkerType,
-          checked: shouldCheck,
-          quantity: detail.quantity,
-        })
-      )
-    ).then(results => {
-      const failures = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+    try {
+      const results = await Promise.allSettled(
+        item.order_details.map(detail =>
+          toggleProductCheck({
+            order_uuid: detail.erp_order_uuid,
+            product_id: detail.product_line_id,
+            checker_type: checkerType,
+            checked: shouldCheck,
+            quantity: detail.quantity,
+          })
+        )
+      );
+
+      const failures = results.filter(
+        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+      );
+
       if (failures.length > 0) {
-        // Some failed, refetch to get accurate state after delay
-        setTimeout(() => fetchProducts(), POST_CHECK_DELAY);
+        await fetchProducts();
+        Alert.alert('Алдаа', 'Тулгалт хадгалах үед алдаа гарлаа. Дахин оролдоно уу.');
       }
-    });
-    
-    // Remove from checking immediately - UI already updated
-    setCheckingProducts(prev => {
-      const next = new Set(prev);
-      next.delete(productKey);
-      return next;
-    });
+    } finally {
+      setCheckingProducts(prev => {
+        const next = new Set(prev);
+        next.delete(productKey);
+        return next;
+      });
+      setIsCheckingAny(false);
+    }
   };
 
   // Group products by brand and sort
@@ -340,7 +346,11 @@ export default function PackageBoxCheckingScreen() {
   };
 
   const getProductKey = (product: AggregatedProduct) => {
-    return `${product.product_uuid}_${product.serial_number || 'no_serial'}`;
+    const lineKey = product.order_details
+      .map((detail) => `${detail.erp_order_uuid}:${detail.product_line_id}`)
+      .sort()
+      .join('|');
+    return `${product.product_uuid}_${product.serial_number || 'no_serial'}_${lineKey}`;
   };
 
   const renderProductItem = ({ item, index }: { item: AggregatedProduct; index: number }) => {
@@ -367,7 +377,7 @@ export default function PackageBoxCheckingScreen() {
               <Image
                 source={{ uri: item.image_url.replace('https://cloud.local.maximus.mn.test', 'https://cloud.maximus.mn') }}
                 style={styles.productImage}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             ) : (
               <View style={styles.productImagePlaceholder}>
@@ -458,6 +468,32 @@ export default function PackageBoxCheckingScreen() {
                 </View>
               )}
             </View>
+
+            {item.warehouse_checked_quantity > 0 && item.warehouse_checker && (
+              <View style={styles.checkerInfoRow}>
+                <View style={styles.checkerAvatarWrap}>
+                  {item.warehouse_checker.avatar ? (
+                    <Image
+                      source={{ uri: item.warehouse_checker.avatar }}
+                      style={styles.checkerAvatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.checkerAvatarText}>
+                      {(item.warehouse_checker.name || 'Нярав').trim().charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.checkerMetaWrap}>
+                  <Text style={styles.checkerMetaTitle} numberOfLines={1}>
+                    Нярав: {item.warehouse_checker.name}
+                  </Text>
+                  <Text style={styles.checkerMetaSubtitle} numberOfLines={1}>
+                    {item.warehouse_checker.job_position || 'Ажилтан'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
           
           {/* Quantity and Check Button */}
@@ -471,12 +507,16 @@ export default function PackageBoxCheckingScreen() {
             <TouchableOpacity
               style={[
                 styles.productCheckButton,
+                (isChecking || isCheckingAny) && styles.productCheckButtonLoading,
                 myFullyChecked && styles.productCheckButtonChecked
               ]}
               onPress={() => handleProductBulkCheck(item)}
+              disabled={isChecking || isCheckingAny}
               activeOpacity={0.6}
             >
-              {myFullyChecked ? (
+              {isChecking || isCheckingAny ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : myFullyChecked ? (
                 <CheckCircle2 size={24} color="#FFFFFF" />
               ) : myCheckedQty > 0 ? (
                 <View style={styles.partialCheckIcon}>
@@ -1064,10 +1104,11 @@ const styles = StyleSheet.create({
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 4,
   },
   productImage: {
-    width: 48,
-    height: 48,
+    width: '100%',
+    height: '100%',
     borderRadius: 6,
   },
   productImagePlaceholder: {
@@ -1336,6 +1377,50 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'GIP-Bold',
     color: '#6B7280',
+  },
+  checkerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  checkerAvatarWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  checkerAvatarText: {
+    fontSize: 11,
+    fontFamily: 'GIP-Bold',
+    color: '#1E40AF',
+  },
+  checkerMetaWrap: {
+    flex: 1,
+  },
+  checkerMetaTitle: {
+    fontSize: 10,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1E3A8A',
+  },
+  checkerMetaSubtitle: {
+    fontSize: 9,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+    marginTop: 1,
   },
   // Product check button (larger, on product row)
   productCheckButton: {

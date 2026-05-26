@@ -25,7 +25,7 @@ import { useAuthStore } from '../../stores/delivery-auth-store';
 import { getWorkerPackages, getWorkerProfile, TodayStats, PackageListItem } from '../../services/delivery-api';
 
 export default function DeliveryScreen() {
-  const { worker } = useAuthStore();
+  const { worker, token, isAuthenticated, logout } = useAuthStore();
   
   const [packages, setPackages] = useState<PackageListItem[]>([]);
   const [stats, setStats] = useState<TodayStats | null>(null);
@@ -33,11 +33,26 @@ export default function DeliveryScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!token || !isAuthenticated) {
+      setPackages([]);
+      setStats(null);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       const [packagesResult, profileResult] = await Promise.all([
         getWorkerPackages(worker?.id),
         getWorkerProfile(worker?.id),
       ]);
+
+      if ((!packagesResult.success && (packagesResult.message || '').toLowerCase().includes('unauthenticated')) ||
+          (!profileResult.success && (profileResult.message || '').toLowerCase().includes('unauthenticated'))) {
+        await logout();
+        router.replace('/login');
+        return;
+      }
       
       if (packagesResult.success && packagesResult.data) {
         // Filter only packages with delivery_pending > 0 or delivered > 0
@@ -57,13 +72,21 @@ export default function DeliveryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [worker?.id]);
+  }, [worker?.id, token, isAuthenticated, logout]);
 
   useEffect(() => {
+    if (!token || !isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, token, isAuthenticated]);
 
   const onRefresh = () => {
+    if (!token || !isAuthenticated) {
+      setRefreshing(false);
+      return;
+    }
     setRefreshing(true);
     fetchData();
   };

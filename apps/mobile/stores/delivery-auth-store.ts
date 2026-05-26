@@ -266,20 +266,6 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         const token = get().token;
-        
-        if (token) {
-          try {
-            await fetch(`${API_BASE_URL}/auth/logout`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-              },
-            });
-          } catch (error) {
-            console.log('Logout API error (ignored):', error);
-          }
-        }
 
         set({
           worker: null,
@@ -290,6 +276,18 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           error: null,
         });
+
+        if (token) {
+          void fetch(`${API_BASE_URL}/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+            },
+          }).catch(() => {
+            // Keep logout silent even if server-side revoke fails.
+          });
+        }
       },
 
       deleteAccount: async () => {

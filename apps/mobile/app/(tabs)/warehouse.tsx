@@ -25,13 +25,20 @@ import { getWorkerPackages, PackageListItem } from '../../services/delivery-api'
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 85 : 65;
 
 export default function WarehouseScreen() {
-  const { worker } = useAuthStore();
+  const { worker, token, isAuthenticated, logout } = useAuthStore();
 
   const [packages, setPackages] = useState<PackageListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchPackages = useCallback(async () => {
+    if (!token || !isAuthenticated) {
+      setPackages([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       console.log('Warehouse: Fetching packages, worker_id:', worker?.id);
       const result = await getWorkerPackages(worker?.id);
@@ -45,7 +52,13 @@ export default function WarehouseScreen() {
         setPackages(warehousePackages);
       } else {
         console.log('Warehouse: API failed:', result.message, 'success:', result.success);
-        Alert.alert('Алдаа', result.message || 'Багц татахад алдаа гарлаа');
+        const message = result.message || 'Багц татахад алдаа гарлаа';
+        if (message.toLowerCase().includes('unauthenticated')) {
+          await logout();
+          router.replace('/login');
+          return;
+        }
+        Alert.alert('Алдаа', message);
       }
     } catch (error) {
       console.error('Warehouse: Fetch error:', error);
@@ -54,13 +67,21 @@ export default function WarehouseScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [worker?.id]);
+  }, [worker?.id, token, isAuthenticated, logout]);
 
   useEffect(() => {
+    if (!token || !isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     fetchPackages();
-  }, [fetchPackages]);
+  }, [fetchPackages, token, isAuthenticated]);
 
   const onRefresh = () => {
+    if (!token || !isAuthenticated) {
+      setRefreshing(false);
+      return;
+    }
     setRefreshing(true);
     fetchPackages();
   };
