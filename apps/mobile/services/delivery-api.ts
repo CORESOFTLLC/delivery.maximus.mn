@@ -1392,6 +1392,7 @@ export interface BatchEmployee {
 export interface PreparationFailureReason {
   id: number;
   name: string;
+  short_description?: string | null;
   description: string | null;
 }
 

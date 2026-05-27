@@ -260,6 +260,11 @@ function BatchDetailView({
   const [failureReasons, setFailureReasons] = useState<PreparationFailureReason[]>([]);
   const [showReasonDropdown, setShowReasonDropdown] = useState(false);
 
+  const getReasonDisplayLabel = useCallback((reason: PreparationFailureReason) => {
+    const shortDescription = (reason.short_description ?? reason.description ?? '').trim();
+    return shortDescription ? `${reason.name} - ${shortDescription}` : reason.name;
+  }, []);
+
   // Series request modal
   const [seriesModal, setSeriesModal] = useState<{
     productUuid: string;
@@ -774,7 +779,10 @@ function BatchDetailView({
             activeOpacity={0.7}
           >
             <Text style={styles.reasonSelectButtonText}>
-              {failureReasons.find((reason) => reason.id === noteModal?.reasonId)?.name || 'Шалтгаан сонгох'}
+              {(() => {
+                const selectedReason = failureReasons.find((reason) => reason.id === noteModal?.reasonId);
+                return selectedReason ? getReasonDisplayLabel(selectedReason) : 'Шалтгаан сонгох';
+              })()}
             </Text>
             <ChevronDown size={16} color="#6B7280" />
           </TouchableOpacity>
@@ -801,7 +809,7 @@ function BatchDetailView({
                     ]}
                     numberOfLines={2}
                   >
-                    {reason.name}
+                    {getReasonDisplayLabel(reason)}
                   </Text>
                 </TouchableOpacity>
               ))}
