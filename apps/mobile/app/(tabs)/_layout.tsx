@@ -159,13 +159,12 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
 export default function TabsLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { employeeDetail, worker, erpRoutes } = useAuthStore();
-  // Агуулахын ажилтан бол (хаалганы ажилтан / нярав) Бэлдэх таб харуулна
-  // employee_detail.warehouses хоосон ирэх кейс дээр fallback нөхцөлүүдийг ашиглана.
-  const hasEmployeeWarehouses = (employeeDetail?.warehouses?.length ?? 0) > 0;
-  const hasErpWarehouses = (erpRoutes ?? []).some((route) => (route.warehouses?.length ?? 0) > 0);
-  const isWarehouseDept = worker?.department?.id === 3 || (worker?.department?.name ?? '').includes('Агуулах');
-  const isWarehouseWorker = hasEmployeeWarehouses || hasErpWarehouses || isWarehouseDept;
+  const { warehouseWorker } = useAuthStore();
+  // Зөвхөн warehouse/gates дээр оноогдсон бараа бэлтгэгч/нярав ажилтанд Бэлдэх таб харагдана.
+  const isPrepareMenuAllowed = Boolean(
+    warehouseWorker?.has_gate_assignment
+      && (warehouseWorker.worker_type === 'storeman' || warehouseWorker.worker_type === 'worker')
+  );
 
   return (
     <>
@@ -233,7 +232,7 @@ export default function TabsLayout() {
           options={{
             title: 'Бэлдэх',
             headerTitle: 'Бараа бэлдэх',
-            href: isWarehouseWorker ? undefined : null,
+            href: isPrepareMenuAllowed ? undefined : null,
             tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
           }}
         />

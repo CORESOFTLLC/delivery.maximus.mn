@@ -71,6 +71,16 @@ export interface EmployeeDetail {
   delivery_zones: Array<{ uuid: string; name: string }>;
 }
 
+export interface WarehouseWorkerInfo {
+  id: number;
+  worker_type: 'storeman' | 'worker' | string;
+  is_available: boolean;
+  warehouse_uuid: string | null;
+  gates_count: number;
+  gate_ids: number[];
+  has_gate_assignment: boolean;
+}
+
 export interface Car {
   id: number;
   plate: string;
@@ -133,6 +143,7 @@ interface AuthState {
   token: string | null;
   erpRoutes: ErpRoute[] | null;
   employeeDetail: EmployeeDetail | null;
+  warehouseWorker: WarehouseWorkerInfo | null;
   deliveryInfo: DeliveryInfo | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -153,6 +164,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       erpRoutes: null,
       employeeDetail: null,
+      warehouseWorker: null,
       deliveryInfo: null,
       isAuthenticated: false,
       isLoading: false,
@@ -228,6 +240,7 @@ export const useAuthStore = create<AuthState>()(
               token: data.access_token,
               erpRoutes: data.erp_details || null,
               employeeDetail: data.employee_detail || null,
+              warehouseWorker: data.warehouse_worker || null,
               deliveryInfo: data.delivery_info || null,
               isAuthenticated: true,
               isLoading: false,
@@ -272,6 +285,7 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           erpRoutes: null,
           employeeDetail: null,
+          warehouseWorker: null,
           deliveryInfo: null,
           isAuthenticated: false,
           error: null,
@@ -315,6 +329,7 @@ export const useAuthStore = create<AuthState>()(
               token: null,
               erpRoutes: null,
               employeeDetail: null,
+              warehouseWorker: null,
               deliveryInfo: null,
               isAuthenticated: false,
               error: null,
@@ -348,6 +363,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token, 
         erpRoutes: state.erpRoutes,
         employeeDetail: state.employeeDetail,
+        warehouseWorker: state.warehouseWorker,
         deliveryInfo: state.deliveryInfo,
         isAuthenticated: state.isAuthenticated 
       }),
