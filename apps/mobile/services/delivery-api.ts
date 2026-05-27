@@ -1367,6 +1367,8 @@ export interface BatchProduct {
   bridge_name: string | null;
   barcode: string | null;
   product_code: string | null;
+  box_pcs: number | null;
+  box_quantity: number | null;
   brand_name: string | null;
   preparer_note: string | null;
   series_request_uuid: string | null;

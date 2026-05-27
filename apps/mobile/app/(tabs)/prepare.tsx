@@ -552,6 +552,10 @@ function BatchDetailView({
 
   const checkedProducts = detail.products.filter((p) => p.warehouse_checked).length;
   const preparedProducts = detail.products.filter((p) => p.prep_status === 'prepared').length;
+  const totalProducts = detail.products.length;
+  const unpreparedProducts = totalProducts - preparedProducts;
+  const preparedPercent = totalProducts > 0 ? Math.round((preparedProducts / totalProducts) * 100) : 0;
+  const unpreparedPercent = totalProducts > 0 ? Math.round((unpreparedProducts / totalProducts) * 100) : 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -652,10 +656,11 @@ function BatchDetailView({
           [['all', 'Бүгд'], ['prepared', 'Бэлдсэн'], ['unprepared', 'Бэлдээгүй']] as const
         ).map(([key, label]) => {
           const count = key === 'all'
-            ? detail.products.length
+            ? totalProducts
             : key === 'prepared'
-            ? detail.products.filter((p) => p.prep_status === 'prepared').length
-            : detail.products.filter((p) => p.prep_status !== 'prepared').length;
+            ? preparedProducts
+            : unpreparedProducts;
+          const percent = key === 'all' ? 100 : key === 'prepared' ? preparedPercent : unpreparedPercent;
           return (
             <TouchableOpacity
               key={key}
@@ -674,6 +679,18 @@ function BatchDetailView({
             </TouchableOpacity>
           );
         })}
+      </View>
+      <View style={styles.prepProgressWrap}>
+        <View style={styles.prepProgressHeader}>
+          <Text style={styles.prepProgressTitle}>Бэлтгэлийн явц</Text>
+          <Text style={styles.prepProgressPercent}>{preparedPercent}%</Text>
+        </View>
+        <View style={styles.prepProgressTrack}>
+          <View style={[styles.prepProgressFill, { width: `${preparedPercent}%` }]} />
+        </View>
+        <Text style={styles.prepProgressMeta}>
+          {preparedProducts}/{totalProducts} бэлдсэн • {unpreparedProducts} бэлдээгүй
+        </Text>
       </View>
       <Text style={styles.sectionTitle}>Бараануудын жагсаалт ({detail.products.length})</Text>
 
@@ -988,6 +1005,13 @@ function ProductRow({
       ? '#EF4444'
       : '#F59E0B';
 
+  const formattedSeriesExpiry = (() => {
+    if (!product.series_expiry_date) return null;
+    const d = product.series_expiry_date.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return product.series_expiry_date;
+    return d;
+  })();
+
   return (
     <View style={styles.productCard}>
       {/* ── Header: index badge + name + prep chip ── */}
@@ -1011,9 +1035,9 @@ function ProductRow({
           ) : (
             <>
               {isPrepared ? (
-                <CheckCircle2 size={13} color="#10B981" />
+                <CheckCircle2 size={20} color="#10B981" />
               ) : (
-                <Circle size={13} color="#9CA3AF" />
+                <Circle size={20} color="#9CA3AF" />
               )}
               <Text style={[styles.prepChipText, isPrepared && styles.prepChipTextDone]}>
                 {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
@@ -1063,12 +1087,9 @@ function ProductRow({
           {(product.series_name || product.series_expiry_date) ? (
             <View style={styles.productSeriesChip}>
               <Text style={styles.productSeriesChipText}>
-                {product.series_name
-                  ? product.series_name
-                  : (() => {
-                      const d = product.series_expiry_date!;
-                      return 'Хүртэл ' + d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(2, 4);
-                    })()}
+                {formattedSeriesExpiry
+                  ? formattedSeriesExpiry
+                  : product.series_name}
               </Text>
             </View>
           ) : product.seri_days > 0 ? (
@@ -1108,6 +1129,14 @@ function ProductRow({
         <View style={styles.productCardQty}>
           <Text style={styles.productCardQtyNum}>{product.total_quantity.toLocaleString()}</Text>
           <Text style={styles.productCardQtyLabel}>ш</Text>
+          {product.box_quantity !== null && product.box_pcs !== null ? (
+            <Text style={styles.productCardQtyBox}>
+              {product.box_quantity.toLocaleString()} хайрцаг
+            </Text>
+          ) : null}
+          {product.box_pcs !== null ? (
+            <Text style={styles.productCardQtyBoxMeta}>1 хайрцаг = {product.box_pcs} ш</Text>
+          ) : null}
           {product.warehouse_checked ? (
             <CheckCheck size={14} color="#10B981" style={{ marginTop: 2 }} />
           ) : null}
@@ -1641,6 +1670,45 @@ const styles = StyleSheet.create({
   prepFilterBadgeTextActive: {
     color: '#fff',
   },
+  prepProgressWrap: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  prepProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  prepProgressTitle: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#374151',
+  },
+  prepProgressPercent: {
+    fontSize: 12,
+    fontFamily: 'GIP-Bold',
+    color: '#10B981',
+  },
+  prepProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  prepProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#10B981',
+  },
+  prepProgressMeta: {
+    marginTop: 6,
+    fontSize: 11,
+    fontFamily: 'GIP-Regular',
+    color: '#6B7280',
+  },
   brandFilterScroll: {
     marginBottom: 8,
   },
@@ -1942,6 +2010,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
+  },
+  productCardQtyBox: {
+    marginTop: 3,
+    fontSize: 11,
+    color: '#2563EB',
+    fontFamily: 'GIP-SemiBold',
+  },
+  productCardQtyBoxMeta: {
+    marginTop: 1,
+    fontSize: 9,
+    color: '#6B7280',
+    fontFamily: 'GIP-Regular',
   },
   productCardFooter: {
     flexDirection: 'row',
