@@ -45,6 +45,8 @@ import {
   Check,
   Circle,
 } from 'lucide-react-native';
+// @ts-ignore - expo-router exports hook in v6
+import { useLocalSearchParams } from 'expo-router';
 import {
   getWarehouseBatches,
   getWarehouseBatchDetail,
@@ -92,8 +94,10 @@ function PrepStatusDot({ status }: { status: string }) {
 
 function BatchListView({
   onSelectBatch,
+  statusFilter,
 }: {
   onSelectBatch: (uuid: string) => void;
+  statusFilter?: string | null;
 }) {
   const [batches, setBatches] = useState<WarehouseBatchItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +133,19 @@ function BatchListView({
     return d.replace('T', ' ').slice(0, 16);
   };
 
+  const filteredBatches = statusFilter
+    ? batches.filter((batch) => batch.status === statusFilter)
+    : batches;
+
+  const filterLabel =
+    statusFilter === 'pending'
+      ? 'Хүлээгдэж буй'
+      : statusFilter === 'preparing'
+        ? 'Бэлдэж буй'
+        : statusFilter === 'prepared'
+          ? 'Бэлтгэл дууссан'
+          : null;
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -138,7 +155,7 @@ function BatchListView({
     );
   }
 
-  if (batches.length === 0) {
+  if (filteredBatches.length === 0) {
     return (
       <ScrollView
         contentContainerStyle={styles.emptyContainer}
@@ -146,17 +163,27 @@ function BatchListView({
       >
         <Package size={56} color="#D1D5DB" />
         <Text style={styles.emptyTitle}>Багц байхгүй</Text>
-        <Text style={styles.emptySubtitle}>Танд хуваарилагдсан багц одоогоор байхгүй байна.</Text>
+        <Text style={styles.emptySubtitle}>
+          {filterLabel
+            ? `${filterLabel} төлөвтэй багц одоогоор байхгүй байна.`
+            : 'Танд хуваарилагдсан багц одоогоор байхгүй байна.'}
+        </Text>
       </ScrollView>
     );
   }
 
   return (
     <FlatList
-      data={batches}
+      data={filteredBatches}
       keyExtractor={(item) => item.uuid}
       contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_HEIGHT + 16 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      ListHeaderComponent={filterLabel ? (
+        <View style={styles.filterBanner}>
+          <Text style={styles.filterBannerLabel}>Идэвхтэй шүүлт</Text>
+          <Text style={styles.filterBannerValue}>{filterLabel}</Text>
+        </View>
+      ) : null}
       renderItem={({ item }) => (
         <TouchableOpacity
           style={styles.batchCard}
@@ -1031,15 +1058,20 @@ function ProductRow({
           activeOpacity={0.7}
         >
           {toggling ? (
-            <ActivityIndicator size="small" color={isPrepared ? '#10B981' : '#9CA3AF'} />
+            <ActivityIndicator size="small" color={isPrepared ? '#10B981' : '#EF4444'} />
           ) : (
             <>
               {isPrepared ? (
                 <CheckCircle2 size={20} color="#10B981" />
               ) : (
-                <Circle size={20} color="#9CA3AF" />
+                <Circle size={20} color="#EF4444" />
               )}
-              <Text style={[styles.prepChipText, isPrepared && styles.prepChipTextDone]}>
+              <Text
+                style={[
+                  styles.prepChipText,
+                  isPrepared ? styles.prepChipTextDone : styles.prepChipTextUndone,
+                ]}
+              >
                 {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
               </Text>
             </>
@@ -1176,7 +1208,9 @@ function ProductRow({
 // ── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function PrepareScreen() {
+  const params = useLocalSearchParams<{ status?: string }>();
   const [selectedBatchUuid, setSelectedBatchUuid] = useState<string | null>(null);
+  const statusFilter = typeof params.status === 'string' ? params.status : null;
 
   if (selectedBatchUuid) {
     return (
@@ -1193,7 +1227,7 @@ export default function PrepareScreen() {
 
   return (
     <View style={styles.screen}>
-      <BatchListView onSelectBatch={setSelectedBatchUuid} />
+      <BatchListView onSelectBatch={setSelectedBatchUuid} statusFilter={statusFilter} />
     </View>
   );
 }
@@ -1251,6 +1285,28 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Regular',
     color: '#9CA3AF',
     textAlign: 'center',
+  },
+  filterBanner: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  filterBannerLabel: {
+    fontSize: 12,
+    fontFamily: 'GIP-Medium',
+    color: '#2563EB',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  filterBannerValue: {
+    fontSize: 16,
+    fontFamily: 'GIP-SemiBold',
+    color: '#1F2937',
+    marginTop: 4,
   },
 
   // ── Badge ──
@@ -1881,6 +1937,9 @@ const styles = StyleSheet.create({
   },
   prepChipTextDone: {
     color: '#10B981',
+  },
+  prepChipTextUndone: {
+    color: '#EF4444',
   },
   productCardBody: {
     flexDirection: 'row',

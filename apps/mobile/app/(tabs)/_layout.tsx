@@ -159,12 +159,14 @@ function DrawerMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
 export default function TabsLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const router = useRouter();
   const { warehouseWorker } = useAuthStore();
   // Зөвхөн warehouse/gates дээр оноогдсон бараа бэлтгэгч/нярав ажилтанд Бэлдэх таб харагдана.
   const isPrepareMenuAllowed = Boolean(
     warehouseWorker?.has_gate_assignment
       && (warehouseWorker.worker_type === 'storeman' || warehouseWorker.worker_type === 'worker')
   );
+  const isPrepareOnlyUser = isPrepareMenuAllowed;
 
   return (
     <>
@@ -192,6 +194,7 @@ export default function TabsLayout() {
           options={{
             title: 'Нүүр',
             headerTitle: 'Өнөөдрийн тойм',
+            href: undefined,
             tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
           }}
         />
@@ -202,6 +205,7 @@ export default function TabsLayout() {
           options={{
             title: 'Агуулах',
             headerTitle: 'Агуулах тулгалт',
+            href: isPrepareOnlyUser ? null : undefined,
             tabBarIcon: ({ color, size }) => <Warehouse size={size} color={color} />,
           }}
         />
@@ -212,6 +216,7 @@ export default function TabsLayout() {
           options={{
             title: 'Түгээлт',
             headerTitle: 'Түгээлт',
+            href: isPrepareOnlyUser ? null : undefined,
             tabBarIcon: ({ color, size }) => <Truck size={size} color={color} />,
           }}
         />
@@ -222,6 +227,7 @@ export default function TabsLayout() {
           options={{
             title: 'Тайлан',
             headerTitle: 'Өнөөдрийн тайлан',
+            href: isPrepareOnlyUser ? null : undefined,
             tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
           }}
         />
@@ -230,10 +236,16 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="prepare"
           options={{
-            title: 'Бэлдэх',
+            title: 'Бараа бэлдэх',
             headerTitle: 'Бараа бэлдэх',
             href: isPrepareMenuAllowed ? undefined : null,
             tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              router.replace('/(tabs)/prepare' as any);
+            },
           }}
         />
 

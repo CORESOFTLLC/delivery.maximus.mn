@@ -33,6 +33,7 @@ import {
   MapPin,
   TrendingUp,
   BarChart3,
+  Layers,
   Banknote,
   XCircle,
   Phone,
@@ -42,50 +43,98 @@ import { useAuthStore, type Coworker } from '../../stores/delivery-auth-store';
 import { 
   getWorkerPackages, 
   getWorkerProfile, 
+  getWarehouseBatches,
   getTodayReport,
-  PackageListItem, 
   TodayReportData,
   WorkerProfile 
 } from '../../services/delivery-api';
 
 export default function HomeScreen() {
-  const { worker, deliveryInfo } = useAuthStore();
+  const { worker, deliveryInfo, warehouseWorker } = useAuthStore();
+  const isPrepareWorker = Boolean(
+    warehouseWorker?.has_gate_assignment
+      && (warehouseWorker.worker_type === 'storeman' || warehouseWorker.worker_type === 'worker')
+  );
   
   const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [report, setReport] = useState<TodayReportData | null>(null);
   const [warehousePending, setWarehousePending] = useState(0);
   const [deliveryPending, setDeliveryPending] = useState(0);
+  const [prepareStats, setPrepareStats] = useState({
+    totalBatches: 0,
+    pending: 0,
+    preparing: 0,
+    prepared: 0,
+    totalProducts: 0,
+    totalQuantity: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [packagesResult, profileResult, reportResult] = await Promise.all([
-        getWorkerPackages(worker?.id).catch(() => ({ success: false as const })),
-        getWorkerProfile(worker?.id).catch(() => ({ success: false as const })),
-        getTodayReport().catch(() => ({ success: false as const })),
-      ]);
-      
-      if (packagesResult.success && 'data' in packagesResult && packagesResult.data) {
-        // Count warehouse pending packages
-        const warehousePackages = packagesResult.data.packages.filter(
-          (pkg) => pkg.warehouse_pending > 0
-        );
-        setWarehousePending(warehousePackages.length);
-        
-        // Count delivery pending packages
-        const deliveryPackages = packagesResult.data.packages.filter(
-          (pkg) => pkg.warehouse_pending === 0 && pkg.delivery_pending > 0
-        );
-        setDeliveryPending(deliveryPackages.length);
-      }
-      
-      if (profileResult.success && 'data' in profileResult && profileResult.data) {
-        setProfile(profileResult.data);
-      }
+      if (isPrepareWorker) {
+        const batchesResult = await getWarehouseBatches().catch(() => ({ success: false as const }));
 
-      if (reportResult.success && 'data' in reportResult && reportResult.data) {
-        setReport(reportResult.data);
+        if (batchesResult.success && batchesResult.data) {
+          const stats = batchesResult.data.reduce(
+            (acc, batch) => {
+              acc.totalBatches += 1;
+              acc.totalProducts += batch.total_products || 0;
+              acc.totalQuantity += batch.total_quantity || 0;
+              if (batch.status === 'pending') acc.pending += 1;
+              if (batch.status === 'preparing') acc.preparing += 1;
+              if (batch.status === 'prepared') acc.prepared += 1;
+              return acc;
+            },
+            {
+              totalBatches: 0,
+              pending: 0,
+              preparing: 0,
+              prepared: 0,
+              totalProducts: 0,
+              totalQuantity: 0,
+            }
+          );
+          setPrepareStats(stats);
+        } else {
+          setPrepareStats({
+            totalBatches: 0,
+            pending: 0,
+            preparing: 0,
+            prepared: 0,
+            totalProducts: 0,
+            totalQuantity: 0,
+          });
+        }
+      } else {
+        const [packagesResult, profileResult, reportResult] = await Promise.all([
+          getWorkerPackages(worker?.id).catch(() => ({ success: false as const })),
+          getWorkerProfile(worker?.id).catch(() => ({ success: false as const })),
+          getTodayReport().catch(() => ({ success: false as const })),
+        ]);
+
+        if (packagesResult.success && 'data' in packagesResult && packagesResult.data) {
+          // Count warehouse pending packages
+          const warehousePackages = packagesResult.data.packages.filter(
+            (pkg) => pkg.warehouse_pending > 0
+          );
+          setWarehousePending(warehousePackages.length);
+
+          // Count delivery pending packages
+          const deliveryPackages = packagesResult.data.packages.filter(
+            (pkg) => pkg.warehouse_pending === 0 && pkg.delivery_pending > 0
+          );
+          setDeliveryPending(deliveryPackages.length);
+        }
+
+        if (profileResult.success && 'data' in profileResult && profileResult.data) {
+          setProfile(profileResult.data);
+        }
+
+        if (reportResult.success && 'data' in reportResult && reportResult.data) {
+          setReport(reportResult.data);
+        }
       }
     } catch (error) {
       console.warn('Dashboard fetch error:', error);
@@ -93,7 +142,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [worker?.id]);
+  }, [worker?.id, isPrepareWorker]);
 
   useEffect(() => {
     fetchData();
@@ -106,6 +155,15 @@ export default function HomeScreen() {
 
   const formatAmount = (amount: number) => {
     return amount.toLocaleString('mn-MN') + '₮';
+  };
+
+  const openPrepareList = (status?: string) => {
+    if (status) {
+      router.push({ pathname: '/(tabs)/prepare', params: { status } } as any);
+      return;
+    }
+
+    router.push('/(tabs)/prepare' as any);
   };
 
   if (loading) {
@@ -155,7 +213,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Coworkers */}
-        {deliveryInfo?.coworkers && deliveryInfo.coworkers.length > 0 && (
+        {!isPrepareWorker && deliveryInfo?.coworkers && deliveryInfo.coworkers.length > 0 && (
           <>
             {deliveryInfo.coworkers.map((cw: Coworker) => (
               <View key={cw.id} style={styles.teamMemberRow}>
@@ -211,7 +269,7 @@ export default function HomeScreen() {
       </View>
 
       {/* Car Card — Автомашины мэдээлэл */}
-      {(profile?.car || deliveryInfo?.car) && (
+      {!isPrepareWorker && (profile?.car || deliveryInfo?.car) && (
         <TouchableOpacity
           style={styles.carCard}
           activeOpacity={0.7}
@@ -248,7 +306,7 @@ export default function HomeScreen() {
       )}
 
       {/* Today Stats Overview */}
-      {todayStats && (
+      {!isPrepareWorker && todayStats && (
         <View style={styles.overviewCard}>
           <View style={styles.overviewHeader}>
             <TrendingUp size={20} color="#2563EB" />
@@ -307,60 +365,169 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {isPrepareWorker && (
+        <View style={styles.overviewCard}>
+          <View style={styles.overviewHeader}>
+            <Package size={20} color="#2563EB" />
+            <Text style={styles.overviewTitle}>Бараа бэлтгэлийн тойм</Text>
+          </View>
+
+          <View style={styles.progressSection}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>Дууссан багц</Text>
+              <Text style={styles.progressPercent}>
+                {prepareStats.totalBatches > 0
+                  ? Math.round((prepareStats.prepared / prepareStats.totalBatches) * 100)
+                  : 0}%
+              </Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${prepareStats.totalBatches > 0
+                      ? Math.round((prepareStats.prepared / prepareStats.totalBatches) * 100)
+                      : 0}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressDetail}>
+              {prepareStats.prepared} / {prepareStats.totalBatches} багц бэлтгэл дууссан
+            </Text>
+          </View>
+
+          <View style={styles.overviewStats}>
+            <TouchableOpacity
+              style={[styles.overviewStatItem, { backgroundColor: '#EFF6FF' }]}
+              activeOpacity={0.8}
+              onPress={() => openPrepareList()}
+            >
+              <Package size={24} color="#2563EB" />
+              <Text style={styles.overviewStatValue}>{prepareStats.totalBatches}</Text>
+              <Text style={styles.overviewStatLabel}>Нийт багц</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.overviewStatItem, { backgroundColor: '#FEF3C7' }]}
+              activeOpacity={0.8}
+              onPress={() => openPrepareList('pending')}
+            >
+              <Clock size={24} color="#F59E0B" />
+              <Text style={styles.overviewStatValue}>{prepareStats.pending}</Text>
+              <Text style={styles.overviewStatLabel}>Хүлээгдэж буй</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.overviewStatItem, { backgroundColor: '#DBEAFE' }]}
+              activeOpacity={0.8}
+              onPress={() => openPrepareList('preparing')}
+            >
+              <TrendingUp size={24} color="#2563EB" />
+              <Text style={styles.overviewStatValue}>{prepareStats.preparing}</Text>
+              <Text style={styles.overviewStatLabel}>Бэлдэж буй</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.overviewStatItem, { backgroundColor: '#D1FAE5' }]}
+              activeOpacity={0.8}
+              onPress={() => openPrepareList('prepared')}
+            >
+              <CheckCircle2 size={24} color="#10B981" />
+              <Text style={styles.overviewStatValue}>{prepareStats.prepared}</Text>
+              <Text style={styles.overviewStatLabel}>Бэлтгэл дууссан</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.amountSection}>
+            <View style={styles.amountRow}>
+              <Layers size={18} color="#2563EB" />
+              <Text style={styles.amountInfoLabel}>Нийт нэр төрөл:</Text>
+              <Text style={styles.amountInfoValueBlue}>{prepareStats.totalProducts.toLocaleString()}</Text>
+            </View>
+            <View style={[styles.amountRow, { marginTop: 8 }]}>
+              <BarChart3 size={18} color="#10B981" />
+              <Text style={styles.amountInfoLabel}>Нийт тоо хэмжээ:</Text>
+              <Text style={styles.amountInfoValue}>{prepareStats.totalQuantity.toLocaleString()} ш</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Quick Actions */}
       <View style={styles.quickActions}>
         <Text style={styles.quickActionsTitle}>Үндсэн үйлдэл</Text>
-        <View style={styles.quickActionsGrid}>
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => router.push('/(tabs)/warehouse' as any)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}>
-              <Warehouse size={28} color="#2563EB" />
-            </View>
-            <Text style={styles.quickActionText}>Агуулах</Text>
-            {warehousePending > 0 && (
-              <View style={styles.quickActionBadge}>
-                <Text style={styles.quickActionBadgeText}>{warehousePending}</Text>
+        {isPrepareWorker ? (
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              onPress={() => openPrepareList()}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}>
+                <Package size={28} color="#2563EB" />
               </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => router.push('/(tabs)/delivery' as any)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Truck size={28} color="#F59E0B" />
-            </View>
-            <Text style={styles.quickActionText}>Түгээлт</Text>
-            {deliveryPending > 0 && (
-              <View style={[styles.quickActionBadge, { backgroundColor: '#F59E0B' }]}>
-                <Text style={styles.quickActionBadgeText}>{deliveryPending}</Text>
+              <Text style={styles.quickActionText}>Бараа бэлдэх</Text>
+              {prepareStats.pending > 0 && (
+                <View style={styles.quickActionBadge}>
+                  <Text style={styles.quickActionBadgeText}>{prepareStats.pending}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/(tabs)/warehouse' as any)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}> 
+                <Warehouse size={28} color="#2563EB" />
               </View>
-            )}
-          </TouchableOpacity>
+              <Text style={styles.quickActionText}>Агуулах</Text>
+              {warehousePending > 0 && (
+                <View style={styles.quickActionBadge}>
+                  <Text style={styles.quickActionBadgeText}>{warehousePending}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => router.push('/(tabs)/report' as any)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: '#E0E7FF' }]}>
-              <BarChart3 size={28} color="#6366F1" />
-            </View>
-            <Text style={styles.quickActionText}>Тайлан</Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/(tabs)/delivery' as any)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FEF3C7' }]}> 
+                <Truck size={28} color="#F59E0B" />
+              </View>
+              <Text style={styles.quickActionText}>Түгээлт</Text>
+              {deliveryPending > 0 && (
+                <View style={[styles.quickActionBadge, { backgroundColor: '#F59E0B' }]}> 
+                  <Text style={styles.quickActionBadgeText}>{deliveryPending}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => router.push('/location' as any)}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: '#FEE2E2' }]}>
-              <MapPin size={28} color="#EF4444" />
-            </View>
-            <Text style={styles.quickActionText}>Байршил</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/(tabs)/report' as any)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#E0E7FF' }]}> 
+                <BarChart3 size={28} color="#6366F1" />
+              </View>
+              <Text style={styles.quickActionText}>Тайлан</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => router.push('/location' as any)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FEE2E2' }]}> 
+                <MapPin size={28} color="#EF4444" />
+              </View>
+              <Text style={styles.quickActionText}>Байршил</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
 
       </View>
@@ -613,6 +780,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'GIP-Bold',
     color: '#10B981',
+  },
+  amountInfoValueBlue: {
+    fontSize: 16,
+    fontFamily: 'GIP-Bold',
+    color: '#2563EB',
   },
 
   // Quick Actions

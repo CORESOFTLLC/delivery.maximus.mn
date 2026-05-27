@@ -14,7 +14,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { AlertCircle, Smartphone, Copy, Lock, Hash } from 'lucide-react-native';
+import { AlertCircle, Smartphone, Copy, Lock, Hash, Eye, EyeOff } from 'lucide-react-native';
 import * as Application from 'expo-application';
 import { useAuthStore } from '../stores/delivery-auth-store';
 import { 
@@ -40,6 +40,7 @@ export default function LoginScreen() {
   const [formErrors, setFormErrors] = useState<{ code?: string; pin?: string }>({});
   const [deviceId, setDeviceId] = useState<string>('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   
   // Refs for PIN inputs
   const pinRefs = useRef<(TextInput | null)[]>([]);
@@ -154,7 +155,13 @@ export default function LoginScreen() {
         console.log('Failed to save credentials:', error);
       }
       
-      router.replace('/(tabs)/warehouse');
+      const warehouseWorker = useAuthStore.getState().warehouseWorker;
+      const isPrepareOnlyUser = Boolean(
+        warehouseWorker?.has_gate_assignment
+          && (warehouseWorker.worker_type === 'storeman' || warehouseWorker.worker_type === 'worker')
+      );
+
+      router.replace(isPrepareOnlyUser ? '/(tabs)/prepare' : '/(tabs)/warehouse');
     }
   };
 
@@ -247,9 +254,19 @@ export default function LoginScreen() {
                     <Text size="sm" className="text-typography-700 font-medium">
                       Системд нэвтрэх PIN (8 орон)
                     </Text>
-                    <TouchableOpacity onPress={clearPin}>
-                      <Text size="xs" className="text-primary-600">Арилгах</Text>
-                    </TouchableOpacity>
+                    <HStack space="md" className="items-center">
+                      <TouchableOpacity
+                        onPress={() => setShowPin((prev) => !prev)}
+                        style={styles.pinVisibilityToggle}
+                        activeOpacity={0.7}
+                      >
+                        {showPin ? <EyeOff size={14} color="#2563EB" /> : <Eye size={14} color="#2563EB" />}
+                        <Text size="xs" className="text-primary-600">{showPin ? 'Нуух' : 'Харах'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={clearPin}>
+                        <Text size="xs" className="text-primary-600">Арилгах</Text>
+                      </TouchableOpacity>
+                    </HStack>
                   </HStack>
                   
                   <View style={styles.pinContainer}>
@@ -267,7 +284,7 @@ export default function LoginScreen() {
                         onKeyPress={(e) => handlePinKeyPress(e, index)}
                         keyboardType="number-pad"
                         maxLength={1}
-                        secureTextEntry
+                        secureTextEntry={!showPin}
                         editable={!isLoading}
                         selectTextOnFocus
                       />
@@ -420,6 +437,11 @@ const styles = StyleSheet.create({
   pinInputError: {
     borderColor: '#DC2626',
     backgroundColor: '#FEF2F2',
+  },
+  pinVisibilityToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   registerRow: {
     flexDirection: 'row',
