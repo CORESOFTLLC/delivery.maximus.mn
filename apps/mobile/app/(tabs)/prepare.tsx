@@ -26,6 +26,7 @@ import {
   Package,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -42,6 +43,7 @@ import {
   GitBranch,
   X,
   Check,
+  Circle,
 } from 'lucide-react-native';
 import {
   getWarehouseBatches,
@@ -50,12 +52,14 @@ import {
   markBatchPrepared,
   toggleProductPrep,
   savePreparerNote,
+  getPreparationFailureReasons,
   getProductSeries,
   submitSeriesRequest,
   WarehouseBatchItem,
   WarehouseBatchDetail,
   BatchProduct,
   BridgeSeries,
+  PreparationFailureReason,
 } from '../../services/delivery-api';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 85 : 65;
@@ -101,7 +105,7 @@ function BatchListView({
       if (result.success && result.data) {
         setBatches(result.data);
       } else {
-        Alert.alert('Алдаа', result.message || 'Багц татахад алдаа гарлаа');
+        Alert.alert('Алдаа', result.error || 'Багц татахад алдаа гарлаа');
       }
     } catch {
       Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
@@ -142,7 +146,7 @@ function BatchListView({
       >
         <Package size={56} color="#D1D5DB" />
         <Text style={styles.emptyTitle}>Багц байхгүй</Text>
-        <Text style={styles.emptySubtitle}>Танд хуваарилагдсан бараа бэлдэх багц одоогоор байхгүй байна.</Text>
+        <Text style={styles.emptySubtitle}>Танд хуваарилагдсан багц одоогоор байхгүй байна.</Text>
       </ScrollView>
     );
   }
@@ -251,8 +255,10 @@ function BatchDetailView({
   const [togglingUuids, setTogglingUuids] = useState<Set<string>>(new Set());
 
   // Note modal
-  const [noteModal, setNoteModal] = useState<{ productUuid: string; note: string } | null>(null);
+  const [noteModal, setNoteModal] = useState<{ productUuid: string; note: string; reasonId: number | null } | null>(null);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [failureReasons, setFailureReasons] = useState<PreparationFailureReason[]>([]);
+  const [showReasonDropdown, setShowReasonDropdown] = useState(false);
 
   // Series request modal
   const [seriesModal, setSeriesModal] = useState<{
@@ -271,7 +277,7 @@ function BatchDetailView({
       if (result.success && result.data) {
         setDetail(result.data);
       } else {
-        Alert.alert('Алдаа', result.message || 'Мэдээлэл татахад алдаа гарлаа');
+        Alert.alert('Алдаа', result.error || 'Мэдээлэл татахад алдаа гарлаа');
       }
     } catch {
       Alert.alert('Алдаа', 'Сүлжээний алдаа гарлаа');
@@ -284,6 +290,21 @@ function BatchDetailView({
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  useEffect(() => {
+    const fetchFailureReasons = async () => {
+      try {
+        const result = await getPreparationFailureReasons();
+        if (result.success && result.data) {
+          setFailureReasons(result.data);
+        }
+      } catch {
+        // Optional dropdown data; keep screen usable even if it fails.
+      }
+    };
+
+    fetchFailureReasons();
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -331,6 +352,11 @@ function BatchDetailView({
   };
 
   const handleTogglePrep = useCallback(async (productUuid: string) => {
+    if (!detail || detail.status !== 'preparing') {
+      Alert.alert('Анхааруулга', 'Эхлээд "Бэлтгэл эхлүүлэх" товч дарж бэлтгэлээ эхлүүлнэ үү.');
+      return;
+    }
+
     setTogglingUuids((s) => new Set(s).add(productUuid));
     try {
       const r = await toggleProductPrep(uuid, productUuid);
@@ -346,6 +372,8 @@ function BatchDetailView({
             ),
           };
         });
+        // Keep header personnel in sync with backend "Бараа бэлдэгч" assignment.
+        fetchDetail();
       } else {
         Alert.alert('Алдаа', r.error || 'Алдаа гарлаа');
       }
@@ -354,18 +382,62 @@ function BatchDetailView({
     } finally {
       setTogglingUuids((s) => { const ns = new Set(s); ns.delete(productUuid); return ns; });
     }
-  }, [uuid]);
+  }, [uuid, detail, fetchDetail]);
+
+  const parsePreparerNote = useCallback((raw: string | null) => {
+    const text = (raw || '').trim();
+    if (!text) return { reasonName: null as string | null, note: '' };
+
+    const reasonPrefix = 'Шалтгаан: ';
+    const notePrefix = 'Тайлбар: ';
+
+    if (text.startsWith(reasonPrefix)) {
+      const lines = text.split('\n').map((line) => line.trim());
+      const reasonLine = lines.find((line) => line.startsWith(reasonPrefix));
+      const noteLine = lines.find((line) => line.startsWith(notePrefix));
+
+      return {
+        reasonName: reasonLine ? reasonLine.slice(reasonPrefix.length).trim() || null : null,
+        note: noteLine ? noteLine.slice(notePrefix.length).trim() : '',
+      };
+    }
+
+    return { reasonName: null as string | null, note: text };
+  }, []);
+
+  const buildPreparerNote = useCallback((reasonName: string | null, note: string) => {
+    const trimmedReason = (reasonName || '').trim();
+    const trimmedNote = note.trim();
+
+    if (trimmedReason && trimmedNote) {
+      return `Шалтгаан: ${trimmedReason}\nТайлбар: ${trimmedNote}`;
+    }
+    if (trimmedReason) {
+      return `Шалтгаан: ${trimmedReason}`;
+    }
+
+    return trimmedNote;
+  }, []);
 
   const handleOpenNote = useCallback((productUuid: string) => {
     const p = detail?.products.find((x) => x.product_uuid === productUuid);
-    setNoteModal({ productUuid, note: p?.preparer_note ?? '' });
-  }, [detail]);
+    const parsed = parsePreparerNote(p?.preparer_note ?? null);
+    const reasonId = parsed.reasonName
+      ? (failureReasons.find((reason) => reason.name === parsed.reasonName)?.id ?? null)
+      : null;
+
+    setShowReasonDropdown(false);
+    setNoteModal({ productUuid, note: parsed.note, reasonId });
+  }, [detail, parsePreparerNote, failureReasons]);
 
   const handleSaveNote = useCallback(async () => {
     if (!noteModal) return;
     setNoteSaving(true);
     try {
-      const r = await savePreparerNote(uuid, noteModal.productUuid, noteModal.note);
+      const selectedReason = failureReasons.find((reason) => reason.id === noteModal.reasonId);
+      const composedNote = buildPreparerNote(selectedReason?.name ?? null, noteModal.note);
+
+      const r = await savePreparerNote(uuid, noteModal.productUuid, composedNote);
       if (r.success) {
         setDetail((prev) => {
           if (!prev) return prev;
@@ -373,11 +445,12 @@ function BatchDetailView({
             ...prev,
             products: prev.products.map((p) =>
               p.product_uuid === noteModal.productUuid
-                ? { ...p, preparer_note: noteModal.note || null }
+                ? { ...p, preparer_note: composedNote || null }
                 : p
             ),
           };
         });
+        setShowReasonDropdown(false);
         setNoteModal(null);
       } else {
         Alert.alert('Алдаа', r.error || 'Алдаа гарлаа');
@@ -387,7 +460,7 @@ function BatchDetailView({
     } finally {
       setNoteSaving(false);
     }
-  }, [uuid, noteModal]);
+  }, [uuid, noteModal, failureReasons, buildPreparerNote]);
 
   const handleOpenSeriesRequest = useCallback(async (productUuid: string) => {
     const p = detail?.products.find((x) => x.product_uuid === productUuid);
@@ -670,6 +743,7 @@ function BatchDetailView({
                     product={product}
                     index={globalIdx++}
                     toggling={togglingUuids.has(product.product_uuid)}
+                    canTogglePrep={detail.status === 'preparing'}
                     onTogglePrep={handleTogglePrep}
                     onOpenNote={handleOpenNote}
                     onOpenSeriesRequest={handleOpenSeriesRequest}
@@ -683,19 +757,62 @@ function BatchDetailView({
     </ScrollView>
 
     {/* ── Note Modal ── */}
-    <Modal visible={noteModal !== null} transparent animationType="slide" onRequestClose={() => setNoteModal(null)}>
+    <Modal visible={noteModal !== null} transparent animationType="slide" onRequestClose={() => { setShowReasonDropdown(false); setNoteModal(null); }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
         <View style={styles.modalSheet}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Тайлбар нэмэх</Text>
-            <TouchableOpacity onPress={() => setNoteModal(null)}>
+            <TouchableOpacity onPress={() => { setShowReasonDropdown(false); setNoteModal(null); }}>
               <X size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.modalFieldLabel}>Шалтгаан</Text>
+          <TouchableOpacity
+            style={styles.reasonSelectButton}
+            onPress={() => setShowReasonDropdown((prev) => !prev)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.reasonSelectButtonText}>
+              {failureReasons.find((reason) => reason.id === noteModal?.reasonId)?.name || 'Шалтгаан сонгох'}
+            </Text>
+            <ChevronDown size={16} color="#6B7280" />
+          </TouchableOpacity>
+
+          {showReasonDropdown && (
+            <View style={styles.reasonDropdownList}>
+              {failureReasons.map((reason) => (
+                <TouchableOpacity
+                  key={reason.id}
+                  style={[
+                    styles.reasonDropdownItem,
+                    noteModal?.reasonId === reason.id && styles.reasonDropdownItemActive,
+                  ]}
+                  onPress={() => {
+                    setNoteModal((prev) => (prev ? { ...prev, reasonId: reason.id } : prev));
+                    setShowReasonDropdown(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.reasonDropdownItemText,
+                      noteModal?.reasonId === reason.id && styles.reasonDropdownItemTextActive,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {reason.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.modalFieldLabel}>Нэмэлт тайлбар</Text>
           <TextInput
             style={styles.noteInput}
             value={noteModal?.note ?? ''}
-            onChangeText={(t) => setNoteModal((prev) => prev ? { ...prev, note: t } : null)}
+            onChangeText={(t) => setNoteModal((prev) => prev ? { ...prev, note: t } : prev)}
             placeholder="Тайлбар бичнэ үү..."
             multiline
             numberOfLines={4}
@@ -840,6 +957,7 @@ function ProductRow({
   product,
   index,
   toggling,
+  canTogglePrep,
   onTogglePrep,
   onOpenNote,
   onOpenSeriesRequest,
@@ -847,6 +965,7 @@ function ProductRow({
   product: BatchProduct;
   index: number;
   toggling: boolean;
+  canTogglePrep: boolean;
   onTogglePrep: (productUuid: string) => void;
   onOpenNote: (productUuid: string) => void;
   onOpenSeriesRequest: (productUuid: string) => void;
@@ -870,16 +989,24 @@ function ProductRow({
         </View>
         <Text style={styles.productCardName} numberOfLines={2}>{product.name}</Text>
         <TouchableOpacity
-          style={[styles.prepChip, isPrepared && styles.prepChipDone]}
+          style={[
+            styles.prepChip,
+            isPrepared && styles.prepChipDone,
+            !canTogglePrep && styles.prepChipDisabled,
+          ]}
           onPress={() => onTogglePrep(product.product_uuid)}
-          disabled={toggling}
+          disabled={toggling || !canTogglePrep}
           activeOpacity={0.7}
         >
           {toggling ? (
             <ActivityIndicator size="small" color={isPrepared ? '#10B981' : '#9CA3AF'} />
           ) : (
             <>
-              <Check size={11} color={isPrepared ? '#10B981' : '#9CA3AF'} />
+              {isPrepared ? (
+                <CheckCircle2 size={13} color="#10B981" />
+              ) : (
+                <Circle size={13} color="#9CA3AF" />
+              )}
               <Text style={[styles.prepChipText, isPrepared && styles.prepChipTextDone]}>
                 {isPrepared ? 'Бэлдсэн' : 'Бэлдээгүй'}
               </Text>
@@ -1668,6 +1795,9 @@ const styles = StyleSheet.create({
     borderColor: '#6EE7B7',
     backgroundColor: '#ECFDF5',
   },
+  prepChipDisabled: {
+    opacity: 0.55,
+  },
   prepChipText: {
     fontSize: 11,
     fontFamily: 'GIP-SemiBold',
@@ -1859,6 +1989,57 @@ const styles = StyleSheet.create({
     fontFamily: 'GIP-Bold',
     color: '#111827',
     flex: 1,
+  },
+  modalFieldLabel: {
+    fontSize: 12,
+    fontFamily: 'GIP-SemiBold',
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  reasonSelectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F9FAFB',
+    marginBottom: 8,
+  },
+  reasonSelectButtonText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+    marginRight: 8,
+  },
+  reasonDropdownList: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 10,
+    maxHeight: 180,
+  },
+  reasonDropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  reasonDropdownItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+  reasonDropdownItemText: {
+    fontSize: 13,
+    fontFamily: 'GIP-Regular',
+    color: '#374151',
+  },
+  reasonDropdownItemTextActive: {
+    color: '#1D4ED8',
+    fontFamily: 'GIP-SemiBold',
   },
   noteInput: {
     borderWidth: 1,

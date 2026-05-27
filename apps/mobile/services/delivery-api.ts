@@ -1389,6 +1389,12 @@ export interface BatchEmployee {
   avatar: string | null;
 }
 
+export interface PreparationFailureReason {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
 export interface WarehouseBatchDetail {
   uuid: string;
   batch_code: string;
@@ -1414,6 +1420,13 @@ export interface WarehouseBatchDetail {
  */
 export async function getWarehouseBatches(): Promise<{ success: boolean; data?: WarehouseBatchItem[]; meta?: { total: number; warehouse_worker_id: number | null }; error?: string }> {
   return apiRequest('/warehouse/batches');
+}
+
+/**
+ * Бараа бэлтгэж чадахгүй шалтгаануудын жагсаалт
+ */
+export async function getPreparationFailureReasons(): Promise<{ success: boolean; data?: PreparationFailureReason[]; error?: string }> {
+  return apiRequest('/warehouse/preparation-failure-reasons');
 }
 
 /**
